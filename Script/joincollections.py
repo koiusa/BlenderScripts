@@ -2,13 +2,13 @@ import bpy
 
 
 def join_collections(arg_collectionname) -> bool:
-    """指定されたコレクション配下のコレクションを再帰的に取得
+    """指定されたコレクション配下のコレクションを結合
 
     Keyword Arguments:
-        collection (bpy.context.collection): 指定オブジェクト
+        arg_collectionname (string): 指定オブジェクト
 
     Returns:
-        subcollections -- 指定されたコレクション配下のコレクション配列
+        Returns: bool -- 実行成否
     """
 
     # 対象のコレクションを取得
