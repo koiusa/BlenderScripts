@@ -5,3 +5,11 @@
 [![GitHub license](https://img.shields.io/github/license/koiusa/BlenderScripts)](https://github.com/koiusa/BlenderScripts/blob/main/LICENSE)
 
 Blender work helpers
+
+```
+Script/combine.py
+```
+下記の処理を順次事項します。  
+・カーブをメッシュ化  
+・モデファイアを適用  
+・コレクションを結合  
