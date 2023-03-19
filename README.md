@@ -7,7 +7,7 @@
 Blender work helpers
 
 ```
-Script/combine.py
+scripts/combine.py
 ```
 選択中のコレクション配下のオブジェクトに対して、下記の処理を順次実行します。  
 ・カーブをメッシュ化  
