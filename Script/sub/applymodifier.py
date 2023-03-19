@@ -21,12 +21,3 @@ def apply_modifier(arg_object: bpy.types.Object) -> bool:
             bpy.ops.object.modifier_apply(modifier=modifier.name)
 
     return True
-
-
-# 全てのオブジェクトを非選択状態にする
-bpy.ops.object.select_all(action='DESELECT')
-
-# 関数の実行
-objects = bpy.context.scene.objects
-for obj in objects:
-    apply_modifier(obj)

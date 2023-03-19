@@ -19,12 +19,3 @@ def curve_to_mesh(arg_object: bpy.types.Object) -> bool:
         bpy.ops.object.convert(target='MESH')
 
     return True
-
-
-# 全てのオブジェクトを非選択状態にする
-bpy.ops.object.select_all(action='DESELECT')
-
-# 関数の実行
-objects = bpy.context.scene.objects
-for obj in objects:
-    curve_to_mesh(obj)
