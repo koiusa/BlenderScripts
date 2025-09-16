@@ -49,6 +49,7 @@ try:
     from . import util_floor
     from . import util_world
     from . import ops_batch
+    from .utils import get_default_output_dir, resolve_output_path, get_timestamp
 except ImportError:
     # Direct import for standalone execution
     import props
@@ -59,6 +60,7 @@ except ImportError:
     import util_floor
     import util_world
     import ops_batch
+    from utils import get_default_output_dir, resolve_output_path, get_timestamp
 
 class BatchRunner:
     """Headless batch processing runner"""
@@ -186,13 +188,13 @@ class BatchRunner:
         """Render all shots for a collection"""
         collection_dir = os.path.join(output_dir, collection_name)
         os.makedirs(collection_dir, exist_ok=True)
-        
+        ts = get_timestamp()
         for camera in cameras:
             # Extract shot type from camera name
             shot_type = camera.name.split('_')[-1] if '_' in camera.name else "shot"
             
             # Generate filename
-            filename = f"{collection_name}_{shot_type}.png"
+            filename = f"{collection_name}_{shot_type}_{ts}.png"
             output_path = os.path.join(collection_dir, filename)
             
             try:
@@ -220,7 +222,9 @@ class BatchRunner:
             self.log(f"Applied preset: {args.preset}")
         
         # Configure output directory
-        output_dir = args.output_dir or "//renders/"
+        output_dir = args.output_dir or get_default_output_dir(create=True)
+        # Resolve and ensure exists; also store back to props for consistency
+        output_dir = resolve_output_path(output_dir)
         props_obj.output_path = output_dir
         
         # Set up shot types
@@ -265,8 +269,8 @@ Examples:
         """
     )
     
-    parser.add_argument('--output-dir', type=str, default="//renders/",
-                       help='Output directory for renders')
+    parser.add_argument('--output-dir', type=str, default="",
+                       help='Output directory for renders (empty = user Pictures/ALCS_Renders)')
     
     parser.add_argument('--preset', type=str, choices=list(presets.PRESETS.keys()),
                        help='Preset to apply')

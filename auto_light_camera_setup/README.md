@@ -105,6 +105,12 @@ Quick-access buttons for common setup configurations:
 - **Batch Mode**: Process multiple collections
 - **Output Path**: Base directory for rendered images
 
+##### Output Path default
+- If left empty, renders go to your user Pictures folder under `ALCS_Renders`:
+  - Windows: `%USERPROFILE%\Pictures\ALCS_Renders`
+  - macOS/Linux: `~/Pictures/ALCS_Renders` (falls back to `~` if `Pictures` is missing)
+- You can enter absolute paths, relative Blender paths like `//renders/`, or use environment variables (e.g. `%USERPROFILE%`). The add-on will resolve the path and create directories as needed.
+
 ## Batch Processing
 
 ### Interactive Batch Mode

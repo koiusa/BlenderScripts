@@ -18,19 +18,15 @@ class ALCS_PT_auto_setup_panel(Panel):
     def draw(self, context):
         layout = self.layout
         props = context.scene.auto_setup_props
-        
-        # Presets section
-        self.draw_presets_section(layout, props)
-        
-        layout.separator()
-        
+        # Presets were moved into Main Controls as a dropdown
+
         # Target Configuration
         self.draw_target_section(layout, props)
         
         layout.separator()
-        
-        # Main Setup Controls
-        self.draw_main_controls(layout)
+
+        # Main Setup Controls (with Preset selector)
+        self.draw_main_controls(layout, props)
         
         layout.separator()
         
@@ -57,24 +53,7 @@ class ALCS_PT_auto_setup_panel(Panel):
         # Utilities
         self.draw_utilities_section(layout)
     
-    def draw_presets_section(self, layout, props):
-        """Draw presets section"""
-        box = layout.box()
-        box.label(text="Presets", icon='PRESET')
-        
-        # Preset buttons in a grid
-        col = box.column()
-        
-        row = col.row()
-        row.operator("alcs.apply_preset", text="Product").preset_name = "PRODUCT"
-        row.operator("alcs.apply_preset", text="Character").preset_name = "CHARACTER"
-        
-        row = col.row()
-        row.operator("alcs.apply_preset", text="Small Prop").preset_name = "SMALL_PROP"
-        row.operator("alcs.apply_preset", text="Flat Art").preset_name = "FLAT_ART"
-        
-        row = col.row()
-        row.operator("alcs.apply_preset", text="Architectural").preset_name = "ARCHITECTURAL"
+    # Removed: draw_presets_section (integrated into main controls)
     
     def draw_target_section(self, layout, props):
         """Draw target configuration section"""
@@ -87,12 +66,19 @@ class ALCS_PT_auto_setup_panel(Panel):
         if not props.use_selection:
             col.prop_search(props, "target_collection", bpy.data, "collections")
     
-    def draw_main_controls(self, layout):
+    def draw_main_controls(self, layout, props):
         """Draw main control buttons"""
         box = layout.box()
         box.label(text="Main Controls", icon='TOOL_SETTINGS')
         
         col = box.column(align=True)
+        # Preset dropdown + apply button
+        row = col.row(align=True)
+        row.prop(props, "preset_name", text="Preset")
+        op = row.operator("alcs.apply_preset", text="Apply", icon='CHECKMARK')
+        op.preset_name = getattr(props, 'preset_name', 'PRODUCT')
+        
+        col.separator()
         col.operator("alcs.auto_setup", text="Auto Setup", icon='AUTO')
         
         row = box.row(align=True)
@@ -161,10 +147,6 @@ class ALCS_PT_auto_setup_panel(Panel):
         col.label(text="Shots", icon='CAMERA_DATA')
         col.prop(props, "shot_types")
         col.prop(props, "render_shots")
-        col.operator("alcs.generate_multi_shots", text="Generate Multi-Shots (Current Target)", icon='CAMERA_DATA')
-        col.label(text="現在の選択またはターゲットコレクションに対して実行", icon='INFO')
-        col.separator()
-
         col.prop(props, "batch_mode")
         if props.batch_mode:
             col.label(text="選択したコレクション群に対し、カメラ設定のショット構成でマルチショットを実行", icon='INFO')
@@ -175,13 +157,18 @@ class ALCS_PT_auto_setup_panel(Panel):
             draw_collection_list(box, props.collection_filter)
             col.prop(props, "render_per_collection")
         
+        # 出力先と実行
         col.separator()
         col.prop(props, "output_path")
-        
-        # Batch operations
-        col.separator()
-        col.operator("alcs.batch_process", text="Process Collections (Multi-Shots)", icon='PLAY')
-        col.operator("alcs.batch_render_all_cameras", text="Render All Cameras", icon='RENDER_STILL')
+        col.label(text="(空欄 = ユーザーのPictures/ALCS_Renders)", icon='INFO')
+
+        # 実行ボタンを下部にまとめる
+        box.separator()
+        box.operator("alcs.process_existing_shots", text="Process (Current Target)", icon='PLAY')
+        if props.batch_mode:
+            row = box.row(align=True)
+            row.operator("alcs.batch_process", text="Process (Collections)", icon='PLAY')
+            row.operator("alcs.background_batch_process", text="Run in Background", icon='SEQUENCE_COLOR_02')
     
     def draw_utilities_section(self, layout):
         """Draw utilities section"""
@@ -194,6 +181,11 @@ class ALCS_PT_auto_setup_panel(Panel):
         
         col.separator()
         col.operator("alcs.export_batch_config", text="Export Config", icon='EXPORT')
+
+        col.separator()
+        row = box.row(align=True)
+        row.operator("alcs.create_control_rig", text="Create Control Rig", icon='CURVE_DATA')
+        row.operator("alcs.delete_control_rig", text="Delete Control Rig", icon='TRASH')
 
 class ALCS_PT_advanced_panel(Panel):
     """Advanced settings panel"""
@@ -250,8 +242,8 @@ class ALCS_PT_info_panel(Panel):
         col = box.column(align=True)
         col.label(text="1. Select objects or choose collection")
         col.label(text="2. Choose a preset or configure manually")
-        col.label(text="3. Click 'Auto Setup' to begin")
-        col.label(text="4. Use 'Generate Multi-Shots' for multiple angles")
+        col.label(text="3. Click 'Auto Setup' to create cameras/lights")
+        col.label(text="4. Set 'Shots' and use 'Process (Current Target)' to render/activate existing shots, or enable Batch Mode for collections")
         
         # Preset descriptions
         box = layout.box()

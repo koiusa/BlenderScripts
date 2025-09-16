@@ -12,6 +12,8 @@ from . import util_floor
 from . import util_world
 from . import util_rig
 from . import util_collections
+from .utils import resolve_output_path, get_timestamp
+from .debug_utils import debugger, verify_rig_consistency, get_debug_report
 
 class ALCS_OT_auto_setup(Operator):
     """Automatically set up lighting, camera, and environment"""
@@ -22,6 +24,10 @@ class ALCS_OT_auto_setup(Operator):
     
     def execute(self, context):
         props = context.scene.auto_setup_props
+        
+        debugger.info("=== Auto Setup Started ===")
+        # Pre-execution rig state verification
+        initial_state = verify_rig_consistency("auto_setup_start")
         
         try:
             # Ensure collections exist up-front and sync depsgraph
@@ -37,35 +43,81 @@ class ALCS_OT_auto_setup(Operator):
             
             # Get bounds information
             bounds_info = util_bounds.get_bounds_info(props)
+            debugger.info(f"Bounds info: center={bounds_info.get('center')}, max_dimension={bounds_info.get('max_dimension')}")
             
-            # Set up lighting
+            # Configure debug settings based on properties
+            if props.debug_mode:
+                debugger.info("Debug mode enabled")
+            if props.debug_coordinate_changes:
+                debugger.info("Coordinate change logging enabled")
+            
+            # Step 1: Set up lighting
+            if props.step_execution_mode:
+                debugger.info("=== Step 1: Setting up lighting ===")
             util_lighting.setup_three_point_lighting(props, bounds_info)
             try:
                 bpy.context.view_layer.update()
             except Exception:
                 pass
+            if props.step_execution_mode:
+                post_lighting_state = verify_rig_consistency("post_lighting")
+                debugger.info(f"Lighting setup completed. Rig consistency: {post_lighting_state}")
             
-            # Set up camera
-            camera = util_camera.position_camera_auto(props, bounds_info, "FRONT")
-            util_camera.set_active_camera(camera)
+            # Step 2: Set up camera(s) according to shot_types
+            if props.step_execution_mode:
+                debugger.info("=== Step 2: Setting up cameras ===")
+            if props.shot_types == 'FRONT':
+                camera = util_camera.position_camera_auto(props, bounds_info, "FRONT")
+                util_camera.set_active_camera(camera)
+            else:
+                cameras = util_camera.generate_multi_shots(props, bounds_info)
+                if cameras:
+                    util_camera.set_active_camera(cameras[0])
             try:
                 bpy.context.view_layer.update()
             except Exception:
                 pass
+            if props.step_execution_mode:
+                post_camera_state = verify_rig_consistency("post_camera")
+                debugger.info(f"Camera setup completed. Rig consistency: {post_camera_state}")
             
-            # Set up floor if enabled
+            # Step 3: Set up floor if enabled
             if props.add_floor:
+                if props.step_execution_mode:
+                    debugger.info("=== Step 3: Setting up floor ===")
                 util_floor.setup_floor(props, bounds_info)
+                if props.step_execution_mode:
+                    post_floor_state = verify_rig_consistency("post_floor")
+                    debugger.info(f"Floor setup completed. Rig consistency: {post_floor_state}")
             
-            # Set up world environment
+            # Step 4: Set up world environment
+            if props.step_execution_mode:
+                debugger.info("=== Step 4: Setting up world environment ===")
             util_world.setup_world_environment(props)
             
-            # Configure render settings
+            # Step 5: Configure render settings
+            if props.step_execution_mode:
+                debugger.info("=== Step 5: Configuring render settings ===")
             util_world.setup_render_settings(props)
 
-            # Parent cameras/lights to locator for unified manipulation
+            # Step 6: Parent cameras/lights to locator for unified manipulation
+            if props.step_execution_mode:
+                debugger.info("=== Step 6: Setting up rig parenting ===")
             util_rig.parent_autosetup_objects_to_locator(bounds_info)
+            if props.step_execution_mode:
+                post_rig_state = verify_rig_consistency("post_rig_setup")
+                debugger.info(f"Rig setup completed. Rig consistency: {post_rig_state}")
             
+            # Post-execution rig state verification
+            final_state = verify_rig_consistency("auto_setup_end")
+            
+            # Generate debug report if there are inconsistencies
+            if not initial_state or not final_state:
+                debugger.warning("Rig consistency issues detected. Generating debug report.")
+                report = get_debug_report()
+                debugger.info(f"Debug report length: {len(report)} characters")
+            
+            debugger.info("=== Auto Setup Completed ===")
             self.report({'INFO'}, "Auto setup completed successfully")
             return {'FINISHED'}
             
@@ -79,9 +131,13 @@ class ALCS_OT_generate_multi_shots(Operator):
     bl_label = "Generate Multi-Shots"
     bl_description = "Generate multiple camera angles and optionally render them"
     bl_options = {'REGISTER', 'UNDO'}
-    
     def execute(self, context):
         props = context.scene.auto_setup_props
+        
+        debugger.info("=== Multi-Shot Generation Started ===")
+        
+        # Pre-execution rig state verification
+        initial_state = verify_rig_consistency("multi_shot_start")
         
         try:
             # Validate targets
@@ -91,6 +147,7 @@ class ALCS_OT_generate_multi_shots(Operator):
             
             # Get bounds information
             bounds_info = util_bounds.get_bounds_info(props)
+            debugger.info(f"Multi-shot bounds: center={bounds_info.get('center')}, max_dimension={bounds_info.get('max_dimension')}")
             
             # Generate multiple camera shots
             cameras = util_camera.generate_multi_shots(props, bounds_info)
@@ -106,6 +163,16 @@ class ALCS_OT_generate_multi_shots(Operator):
             # Ensure cameras (and lights if present) are parented under the locator
             util_rig.parent_autosetup_objects_to_locator(bounds_info)
             
+            # Post-execution rig state verification
+            final_state = verify_rig_consistency("multi_shot_end")
+            
+            # Generate debug report if there are inconsistencies
+            if not initial_state or not final_state:
+                debugger.warning("Rig consistency issues detected during multi-shot generation.")
+                report = get_debug_report()
+                debugger.info(f"Multi-shot debug report length: {len(report)} characters")
+            
+            debugger.info("=== Multi-Shot Generation Completed ===")
             self.report({'INFO'}, f"Generated {len(cameras)} camera shots")
             return {'FINISHED'}
             
@@ -116,17 +183,18 @@ class ALCS_OT_generate_multi_shots(Operator):
     def render_multiple_shots(self, context, cameras, props):
         """Render all generated camera shots"""
         import os
-        
-        base_path = bpy.path.abspath(props.output_path)
+
+        base_path = resolve_output_path(props.output_path)
         if not os.path.exists(base_path):
             os.makedirs(base_path, exist_ok=True)
-        
+
+        ts = get_timestamp()
         for i, camera in enumerate(cameras):
             # Extract shot type from camera name
             shot_type = camera.name.split('_')[-1] if '_' in camera.name else f"shot_{i+1}"
             
             # Generate output filename
-            filename = f"shot_{shot_type}.png"
+            filename = f"shot_{shot_type}_{ts}.png"
             output_path = os.path.join(base_path, filename)
             
             # Render shot
@@ -226,14 +294,14 @@ class ALCS_OT_quick_render_current(Operator):
             
             # Generate output path
             import os
-            import time
+            from .utils import get_timestamp
             
-            base_path = bpy.path.abspath(props.output_path)
+            base_path = resolve_output_path(props.output_path)
             if not os.path.exists(base_path):
                 os.makedirs(base_path, exist_ok=True)
             
-            timestamp = int(time.time())
-            filename = f"quick_render_{timestamp}.png"
+            ts = get_timestamp()
+            filename = f"quick_render_{ts}.png"
             output_path = os.path.join(base_path, filename)
             
             # Render
@@ -245,6 +313,58 @@ class ALCS_OT_quick_render_current(Operator):
         except Exception as e:
             self.report({'ERROR'}, f"Render failed: {str(e)}")
             return {'CANCELLED'}
+
+class ALCS_OT_process_existing_shots(Operator):
+    """Process existing AutoSetup cameras (no new creation)"""
+    bl_idname = "alcs.process_existing_shots"
+    bl_label = "Process Existing Shots"
+    bl_description = "Render/activate existing AutoSetup cameras for current shot types"
+    bl_options = {'REGISTER', 'UNDO'}
+
+    def execute(self, context):
+        props = context.scene.auto_setup_props
+        try:
+            # Determine desired shot labels
+            if props.shot_types == 'ALL':
+                desired = ['FRONT', '3Q_L', '3Q_R', 'TOP', 'LOW']
+            elif props.shot_types == 'FRONT':
+                desired = ['FRONT']
+            elif props.shot_types == '3Q':
+                desired = ['3Q_L', '3Q_R']
+            else:
+                desired = ['FRONT', '3Q_L', '3Q_R', 'TOP', 'LOW']
+
+            cameras = []
+            for obj in context.scene.objects:
+                if obj.type == 'CAMERA' and obj.name.startswith("AutoSetup_Camera_"):
+                    if any(f"_{lab}" in obj.name for lab in desired):
+                        cameras.append(obj)
+
+            if not cameras:
+                self.report({'INFO'}, "No existing AutoSetup cameras for current shot types")
+                return {'FINISHED'}
+
+            if props.render_shots:
+                self.render_existing(context, cameras, props)
+            else:
+                util_camera.set_active_camera(cameras[0])
+
+            self.report({'INFO'}, f"Processed {len(cameras)} existing cameras")
+            return {'FINISHED'}
+        except Exception as e:
+            self.report({'ERROR'}, f"Processing existing shots failed: {e}")
+            return {'CANCELLED'}
+
+    def render_existing(self, context, cameras, props):
+        import os
+        base_path = resolve_output_path(props.output_path)
+        os.makedirs(base_path, exist_ok=True)
+        ts = get_timestamp()
+        for i, camera in enumerate(cameras):
+            shot_type = camera.name.split('_')[-1] if '_' in camera.name else f"shot_{i+1}"
+            filename = f"shot_{shot_type}_{ts}.png"
+            output_path = os.path.join(base_path, filename)
+            util_camera.render_camera_shot(camera, output_path)
 
 class ALCS_OT_create_studio_setup(Operator):
     """Create a more advanced studio lighting setup"""
@@ -279,4 +399,44 @@ class ALCS_OT_create_studio_setup(Operator):
             
         except Exception as e:
             self.report({'ERROR'}, f"Studio setup failed: {str(e)}")
+            return {'CANCELLED'}
+
+
+class ALCS_OT_create_control_rig(Operator):
+    """Create spline-based control rig to manipulate camera/lights"""
+    bl_idname = "alcs.create_control_rig"
+    bl_label = "Create Control Rig"
+    bl_description = "Create a spline control rig (orbit/radius/height) for camera and lights"
+    bl_options = {'REGISTER', 'UNDO'}
+
+    def execute(self, context):
+        props = context.scene.auto_setup_props
+        try:
+            # Validate targets and bounds
+            if not util_bounds.validate_targets(props):
+                self.report({'ERROR'}, "No valid target objects found")
+                return {'CANCELLED'}
+            bounds_info = util_bounds.get_bounds_info(props)
+            util_rig.create_spline_control_rig(bounds_info)
+            self.report({'INFO'}, "Control rig created. Use the control empty to orbit/scale/raise camera.")
+            return {'FINISHED'}
+        except Exception as e:
+            self.report({'ERROR'}, f"Create control rig failed: {e}")
+            return {'CANCELLED'}
+
+
+class ALCS_OT_delete_control_rig(Operator):
+    """Delete spline-based control rig"""
+    bl_idname = "alcs.delete_control_rig"
+    bl_label = "Delete Control Rig"
+    bl_description = "Delete the spline control rig"
+    bl_options = {'REGISTER', 'UNDO'}
+
+    def execute(self, context):
+        try:
+            util_rig.delete_control_rig()
+            self.report({'INFO'}, "Control rig deleted")
+            return {'FINISHED'}
+        except Exception as e:
+            self.report({'ERROR'}, f"Delete control rig failed: {e}")
             return {'CANCELLED'}

@@ -9,9 +9,26 @@ from bpy.props import (
     StringProperty, EnumProperty, FloatVectorProperty
 )
 
+# Static preset items to avoid registration-time errors
+PRESET_ITEMS = (
+    ('PRODUCT', 'Product', 'Optimized for product visualization'),
+    ('CHARACTER', 'Character/Portrait', 'Optimized for character and portrait rendering'),
+    ('SMALL_PROP', 'Small Prop', 'Close-up shots for small objects and details'),
+    ('FLAT_ART', 'Flat Art/Technical', 'Flat, even lighting for technical documentation'),
+    ('ARCHITECTURAL', 'Architectural', 'Wide shots for architectural visualization'),
+)
+
 class AutoSetupProperties(bpy.types.PropertyGroup):
     """Main property group for auto setup configuration"""
     
+    # Preset selection
+    preset_name: EnumProperty(
+        name="Preset",
+        description="Preset configuration to apply",
+        items=PRESET_ITEMS,
+        default='PRODUCT'
+    )
+
     # Target Configuration
     use_selection: BoolProperty(
         name="Use Selection",
@@ -198,6 +215,26 @@ class AutoSetupProperties(bpy.types.PropertyGroup):
     output_path: StringProperty(
         name="Output Path",
         description="Base output path for batch rendering",
-        default="//renders/",
+        # Default is user's Pictures\ALCS_Renders when empty (see utils.resolve_output_path)
+        default="",
         subtype='DIR_PATH'
+    )
+    
+    # Debug and Development Settings
+    debug_mode: BoolProperty(
+        name="Debug Mode",
+        description="Enable detailed debug logging and state verification",
+        default=False
+    )
+    
+    step_execution_mode: BoolProperty(
+        name="Step Execution Mode",
+        description="Execute Auto Setup in steps with verification between each phase",
+        default=False
+    )
+    
+    debug_coordinate_changes: BoolProperty(
+        name="Log Coordinate Changes",
+        description="Log all coordinate changes during setup for position drift analysis",
+        default=False
     )

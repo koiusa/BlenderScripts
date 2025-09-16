@@ -12,6 +12,10 @@ from . import util_lighting
 from . import util_floor
 from . import util_world
 from . import util_rig
+from .utils import resolve_output_path, get_timestamp
+import subprocess
+import tempfile
+from pathlib import Path
 
 class ALCS_OT_batch_process(Operator):
     """Process multiple collections in batch mode"""
@@ -137,18 +141,18 @@ class ALCS_OT_batch_process(Operator):
     
     def render_collection_shots(self, context, collection, cameras, props):
         """Render all shots for a collection"""
-        base_path = bpy.path.abspath(props.output_path)
+        base_path = resolve_output_path(props.output_path)
         collection_path = os.path.join(base_path, collection.name)
         
         # Create collection directory
         os.makedirs(collection_path, exist_ok=True)
-        
+        ts = get_timestamp()
         for camera in cameras:
             # Extract shot type from camera name
             shot_type = camera.name.split('_')[-1] if '_' in camera.name else "shot"
             
             # Generate filename
-            filename = f"{collection.name}_{shot_type}.png"
+            filename = f"{collection.name}_{shot_type}_{ts}.png"
             output_path = os.path.join(collection_path, filename)
             
             try:
@@ -176,7 +180,7 @@ class ALCS_OT_batch_render_all_cameras(Operator):
                 return {'CANCELLED'}
             
             # Set up output directory
-            base_path = bpy.path.abspath(props.output_path)
+            base_path = resolve_output_path(props.output_path)
             render_path = os.path.join(base_path, "all_cameras")
             os.makedirs(render_path, exist_ok=True)
             
@@ -344,6 +348,91 @@ class ALCS_OT_export_batch_config(Operator):
         
         context.window_manager.fileselect_add(self)
         return {'RUNNING_MODAL'}
+
+class ALCS_OT_background_batch_process(Operator):
+    """Run batch processing in a background Blender process"""
+    bl_idname = "alcs.background_batch_process"
+    bl_label = "Run Batch in Background"
+    bl_description = "Start a separate headless Blender to process selected collections and render"
+    bl_options = {'REGISTER'}
+
+    def execute(self, context):
+        props = context.scene.auto_setup_props
+        try:
+            # Determine target collections (same logic as batch UI)
+            collections = []
+            if hasattr(props, 'batch_target_collection') and props.batch_target_collection:
+                chosen = bpy.data.collections.get(props.batch_target_collection)
+                if chosen:
+                    collections = [chosen]
+            if not collections:
+                for collection in bpy.data.collections:
+                    if not self._collection_has_mesh_objects(collection):
+                        continue
+                    if props.collection_filter and props.collection_filter.lower() not in collection.name.lower():
+                        continue
+                    collections.append(collection)
+
+            # Save a temp copy of the current .blend for background process
+            blend_src = bpy.data.filepath
+            tmpdir = tempfile.gettempdir()
+            if blend_src:
+                base = os.path.splitext(os.path.basename(blend_src))[0]
+                temp_blend = os.path.join(tmpdir, f"{base}_alcs_bg.blend")
+            else:
+                temp_blend = os.path.join(tmpdir, "alcs_bg.blend")
+            bpy.ops.wm.save_as_mainfile(filepath=temp_blend, copy=True)
+
+            # Build background command
+            blender_exe = bpy.app.binary_path
+            addon_dir = Path(__file__).parent
+            script_path = str(addon_dir / "batch_runner.py")
+
+            args = [
+                blender_exe,
+                "-b",
+                temp_blend,
+                "--python",
+                script_path,
+                "--",
+            ]
+            # Pass preset and shots
+            if getattr(props, 'preset_name', None):
+                args += ["--preset", props.preset_name]
+            if getattr(props, 'shot_types', None):
+                args += ["--shots", props.shot_types]
+            # Pass collections explicitly if we have them
+            if collections:
+                names = ",".join([c.name for c in collections])
+                args += ["--collections", names]
+            # Request rendering in background
+            args += ["--render", "--verbose"]
+            # Output directory (empty string means default Pictures path in runner)
+            if getattr(props, 'output_path', ""):
+                args += ["--output-dir", props.output_path]
+
+            # Spawn background process (no console noise)
+            try:
+                subprocess.Popen(args, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            except Exception:
+                # Fallback without redirection
+                subprocess.Popen(args)
+
+            self.report({'INFO'}, "Background batch started. You can continue working.")
+            return {'FINISHED'}
+
+        except Exception as e:
+            self.report({'ERROR'}, f"Failed to start background batch: {e}")
+            return {'CANCELLED'}
+
+    def _collection_has_mesh_objects(self, collection):
+        for obj in collection.objects:
+            if obj.type == 'MESH':
+                return True
+        for child in collection.children:
+            if self._collection_has_mesh_objects(child):
+                return True
+        return False
 
 def get_collections_for_batch(collection_filter: str = "") -> list:
     """

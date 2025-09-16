@@ -6,9 +6,9 @@ Handles automatic detection of object bounds for camera and lighting positioning
 import bpy
 import bmesh
 from mathutils import Vector
-from typing import List, Tuple, Optional
-
-AUTOSETUP_FLOOR_NAMES = {"AutoSetup_Floor", "AutoSetup_InfiniteFloor"}
+from typing import List, Tuple, Optional, Dict, Any
+from .constants import AUTOSETUP_FLOOR_NAMES
+from .utils import ALCSLogger, safe_execute
 
 def get_target_objects(props) -> List[bpy.types.Object]:
     """
@@ -18,25 +18,33 @@ def get_target_objects(props) -> List[bpy.types.Object]:
         props: AutoSetupProperties instance
         
     Returns:
-        List of objects to target
+        List of mesh objects to target (excludes AutoSetup floors)
     """
-    objects = []
+    def _get_objects():
+        objects = []
+        
+        if props.use_selection and bpy.context.selected_objects:
+            # Use selected objects (exclude AutoSetup floors)
+            objects = [obj for obj in bpy.context.selected_objects
+                      if obj.type == 'MESH' and obj.name not in AUTOSETUP_FLOOR_NAMES]
+            ALCSLogger.info(f"Using {len(objects)} selected objects as targets")
+        elif props.target_collection:
+            # Use specified collection
+            collection = bpy.data.collections.get(props.target_collection)
+            if collection:
+                objects = get_objects_in_collection(collection)
+                ALCSLogger.info(f"Using {len(objects)} objects from collection '{props.target_collection}'")
+            else:
+                ALCSLogger.warning(f"Collection '{props.target_collection}' not found")
+        else:
+            # Use all visible mesh objects in scene
+            objects = [obj for obj in bpy.context.scene.objects
+                      if obj.type == 'MESH' and obj.visible_get() and obj.name not in AUTOSETUP_FLOOR_NAMES]
+            ALCSLogger.info(f"Using {len(objects)} visible mesh objects from scene")
+        
+        return objects
     
-    if props.use_selection and bpy.context.selected_objects:
-        # Use selected objects (exclude AutoSetup floors)
-        objects = [obj for obj in bpy.context.selected_objects
-                  if obj.type == 'MESH' and obj.name not in AUTOSETUP_FLOOR_NAMES]
-    elif props.target_collection:
-        # Use specified collection
-        collection = bpy.data.collections.get(props.target_collection)
-        if collection:
-            objects = get_objects_in_collection(collection)
-    else:
-        # Use all visible mesh objects in scene
-        objects = [obj for obj in bpy.context.scene.objects
-                  if obj.type == 'MESH' and obj.visible_get() and obj.name not in AUTOSETUP_FLOOR_NAMES]
-    
-    return objects
+    return safe_execute(_get_objects, "Failed to get target objects", []) or []
 
 def get_objects_in_collection(collection) -> List[bpy.types.Object]:
     """
@@ -107,7 +115,7 @@ def calculate_bounds(objects: List[bpy.types.Object]) -> Tuple[Vector, Vector, V
     
     return min_coord, max_coord, center
 
-def get_bounds_info(props) -> dict:
+def get_bounds_info(props) -> Dict[str, Any]:
     """
     Get comprehensive bounds information for target objects.
     
@@ -115,33 +123,44 @@ def get_bounds_info(props) -> dict:
         props: AutoSetupProperties instance
         
     Returns:
-        Dictionary with bounds information
+        Dictionary with bounds information including:
+        - objects: List of target objects
+        - min_coord, max_coord: Bounding box corners
+        - center: Center point
+        - size: Dimensions vector
+        - max_dimension: Largest dimension
     """
-    objects = get_target_objects(props)
-    
-    if not objects:
-        print("Warning: No target objects found")
+    def _calculate_bounds():
+        objects = get_target_objects(props)
+        
+        if not objects:
+            ALCSLogger.warning("No target objects found, using default bounds")
+            return {
+                'objects': [],
+                'min_coord': Vector((-1, -1, -1)),
+                'max_coord': Vector((1, 1, 1)),
+                'center': Vector((0, 0, 0)),
+                'size': Vector((2, 2, 2)),
+                'max_dimension': 2.0
+            }
+        
+        min_coord, max_coord, center = calculate_bounds(objects)
+        size = max_coord - min_coord
+        max_dimension = max(size.x, size.y, size.z)
+        
+        ALCSLogger.info(f"Calculated bounds for {len(objects)} objects: "
+                       f"center={center}, max_dim={max_dimension:.2f}")
+        
         return {
-            'objects': [],
-            'min_coord': Vector((-1, -1, -1)),
-            'max_coord': Vector((1, 1, 1)),
-            'center': Vector((0, 0, 0)),
-            'size': Vector((2, 2, 2)),
-            'max_dimension': 2.0
+            'objects': objects,
+            'min_coord': min_coord,
+            'max_coord': max_coord,
+            'center': center,
+            'size': size,
+            'max_dimension': max_dimension
         }
     
-    min_coord, max_coord, center = calculate_bounds(objects)
-    size = max_coord - min_coord
-    max_dimension = max(size.x, size.y, size.z)
-    
-    return {
-        'objects': objects,
-        'min_coord': min_coord,
-        'max_coord': max_coord,
-        'center': center,
-        'size': size,
-        'max_dimension': max_dimension
-    }
+    return safe_execute(_calculate_bounds, "Failed to calculate bounds info", {}) or {}
 
 def validate_targets(props) -> bool:
     """
@@ -154,4 +173,11 @@ def validate_targets(props) -> bool:
         True if valid targets found, False otherwise
     """
     objects = get_target_objects(props)
-    return len(objects) > 0
+    is_valid = len(objects) > 0
+    
+    if not is_valid:
+        ALCSLogger.error("No valid target objects found")
+    else:
+        ALCSLogger.info(f"Validated {len(objects)} target objects")
+    
+    return is_valid

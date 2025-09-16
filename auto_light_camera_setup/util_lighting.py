@@ -7,49 +7,37 @@ import bpy
 from mathutils import Vector
 import math
 from . import util_collections
+from . import util_rig
+from .debug_utils import debugger, log_object_state
 
 def create_or_get_light(name: str, light_type: str = 'AREA') -> bpy.types.Object:
-    """
-    Create a new light or get existing one by name.
-    
-    Args:
-        name: Light object name
-        light_type: Type of light (SUN, POINT, SPOT, AREA)
-        
-    Returns:
-        Light object
-    """
+    """Create a new light or get existing one by name."""
     light = bpy.data.objects.get(name)
     
     if light is None:
         # Create new light
         light_data = bpy.data.lights.new(name + "_Data", light_type)
         light = bpy.data.objects.new(name, light_data)
-        # Link to AutoSetup light collection (avoid context.collection)
+        # Link to AutoSetup light collection
         _, lights_col = util_collections.ensure_autosetup_collections()
         util_collections.link_object_to_collection(light, lights_col)
-    else:
+    elif light.data.type != light_type:
         # Update existing light type if different
-        if light.data.type != light_type:
-            # Remove old light data
-            old_data = light.data
-            # Create new light data
-            light_data = bpy.data.lights.new(name + "_Data", light_type)
-            light.data = light_data
-            # Remove old data if no other users
-            if old_data.users == 0:
-                bpy.data.lights.remove(old_data)
+        old_data = light.data
+        light_data = bpy.data.lights.new(name + "_Data", light_type)
+        light.data = light_data
+        # Remove old data if no other users
+        if old_data.users == 0:
+            bpy.data.lights.remove(old_data)
     
     return light
 
 def setup_three_point_lighting(props, bounds_info: dict):
     """
     Set up three-point lighting system (key, fill, rim).
-    
-    Args:
-        props: AutoSetupProperties instance
-        bounds_info: Bounds information from util_bounds
     """
+    debugger.info("Starting setup_three_point_lighting")
+    
     center = bounds_info['center']
     max_dimension = bounds_info['max_dimension']
     
@@ -57,37 +45,58 @@ def setup_three_point_lighting(props, bounds_info: dict):
     light_distance = max_dimension * 2.0
     light_height = max_dimension * 1.5
     
+    # Light rig detection: if light is rigged, skip position reset
+    def _is_rigged(obj: bpy.types.Object) -> bool:
+        return util_rig.is_light_rigged(obj)
+
     # Key Light (main light)
     key_light = create_or_get_light("AutoSetup_KeyLight", 'AREA')
-    key_light.location = center + Vector((-light_distance * 0.7, -light_distance, light_height))
+    log_object_state(key_light, "setup_three_point_lighting", "key_light_initial")
+    if not _is_rigged(key_light):
+        target_pos = center + Vector((-light_distance * 0.7, -light_distance, light_height))
+        util_rig.safe_set_world_position(key_light, target_pos, "key_light_position")
+        point_light_at_target(key_light, center)
+    else:
+        debugger.info(f"Skipping position for rigged light {key_light.name}")
     key_light.data.energy = props.light_key_intensity
     key_light.data.size = max_dimension * 0.5
-    point_light_at_target(key_light, center)
     
     # Fill Light (softer, opposite side)
     fill_light = create_or_get_light("AutoSetup_FillLight", 'AREA')
-    fill_light.location = center + Vector((light_distance * 0.5, -light_distance * 0.3, light_height * 0.8))
+    log_object_state(fill_light, "setup_three_point_lighting", "fill_light_initial")
+    if not _is_rigged(fill_light):
+        target_pos = center + Vector((light_distance * 0.5, -light_distance * 0.3, light_height * 0.8))
+        util_rig.safe_set_world_position(fill_light, target_pos, "fill_light_position")
+        point_light_at_target(fill_light, center)
+    else:
+        debugger.info(f"Skipping position for rigged light {fill_light.name}")
     fill_light.data.energy = props.light_fill_intensity
     fill_light.data.size = max_dimension * 0.8
-    point_light_at_target(fill_light, center)
     
     # Rim Light (back light for edge definition)
     rim_side = determine_rim_light_side(bounds_info)
     rim_x = light_distance * rim_side
     rim_light = create_or_get_light("AutoSetup_RimLight", 'AREA')
-    rim_light.location = center + Vector((rim_x, light_distance * 0.8, light_height * 1.2))
+    log_object_state(rim_light, "setup_three_point_lighting", "rim_light_initial")
+    if not _is_rigged(rim_light):
+        target_pos = center + Vector((rim_x, light_distance * 0.8, light_height * 1.2))
+        util_rig.safe_set_world_position(rim_light, target_pos, "rim_light_position")
+        point_light_at_target(rim_light, center)
+    else:
+        debugger.info(f"Skipping position for rigged light {rim_light.name}")
     rim_light.data.energy = props.light_rim_intensity
     rim_light.data.size = max_dimension * 0.3
-    point_light_at_target(rim_light, center)
+    
+    debugger.info("Completed setup_three_point_lighting")
 
 def point_light_at_target(light: bpy.types.Object, target_location: Vector):
     """
     Point light at target location using track-to constraint.
-    
-    Args:
-        light: Light object
-        target_location: Location to point at
     """
+    # If light is under a light rig, use rig's tracking system
+    if util_rig.is_light_rigged(light):
+        return
+    
     # Create empty at target location for tracking
     track_target_name = f"{light.name}_TrackTarget"
     track_target = bpy.data.objects.get(track_target_name)
@@ -98,7 +107,8 @@ def point_light_at_target(light: bpy.types.Object, target_location: Vector):
         _, lights_col = util_collections.ensure_autosetup_collections()
         util_collections.link_object_to_collection(track_target, lights_col)
     
-    track_target.location = target_location
+    # Place target at world-space center (avoid accumulating parent offsets)
+    track_target.matrix_world.translation = target_location
     
     # Add track-to constraint
     constraint = None
