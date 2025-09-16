@@ -6,6 +6,7 @@ Handles three-point lighting setup with automatic positioning.
 import bpy
 from mathutils import Vector
 import math
+from . import util_collections
 
 def create_or_get_light(name: str, light_type: str = 'AREA') -> bpy.types.Object:
     """
@@ -24,7 +25,9 @@ def create_or_get_light(name: str, light_type: str = 'AREA') -> bpy.types.Object
         # Create new light
         light_data = bpy.data.lights.new(name + "_Data", light_type)
         light = bpy.data.objects.new(name, light_data)
-        bpy.context.collection.objects.link(light)
+        # Link to AutoSetup light collection (avoid context.collection)
+        _, lights_col = util_collections.ensure_autosetup_collections()
+        util_collections.link_object_to_collection(light, lights_col)
     else:
         # Update existing light type if different
         if light.data.type != light_type:
@@ -91,7 +94,9 @@ def point_light_at_target(light: bpy.types.Object, target_location: Vector):
     
     if track_target is None:
         track_target = bpy.data.objects.new(track_target_name, None)
-        bpy.context.collection.objects.link(track_target)
+        # Put track target into lights collection for grouping (avoid context.collection)
+        _, lights_col = util_collections.ensure_autosetup_collections()
+        util_collections.link_object_to_collection(track_target, lights_col)
     
     track_target.location = target_location
     

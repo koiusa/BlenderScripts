@@ -8,6 +8,8 @@ import bmesh
 from mathutils import Vector, Euler
 import math
 from . import util_bounds
+from . import util_collections
+from . import util_rig
 
 def create_or_get_camera(name: str = "AutoSetup_Camera") -> bpy.types.Object:
     """
@@ -25,7 +27,13 @@ def create_or_get_camera(name: str = "AutoSetup_Camera") -> bpy.types.Object:
         # Create new camera
         camera_data = bpy.data.cameras.new(name + "_Data")
         camera = bpy.data.objects.new(name, camera_data)
-        bpy.context.collection.objects.link(camera)
+        # Link to AutoSetup camera collection (avoid context.collection)
+        cams_col, _ = util_collections.ensure_autosetup_collections()
+        util_collections.link_object_to_collection(camera, cams_col)
+    else:
+        # Ensure existing camera is organized under AutoSetup_Cameras
+        cams_col, _ = util_collections.ensure_autosetup_collections()
+        util_collections.link_object_to_collection(camera, cams_col)
     
     return camera
 
@@ -106,7 +114,9 @@ def point_camera_at_target(camera: bpy.types.Object, target_location: Vector):
     
     if track_target is None:
         track_target = bpy.data.objects.new(track_target_name, None)
-        bpy.context.collection.objects.link(track_target)
+        # Put track target into cameras collection as well for grouping (avoid context.collection)
+        cams_col, _ = util_collections.ensure_autosetup_collections()
+        util_collections.link_object_to_collection(track_target, cams_col)
     
     track_target.location = target_location
     
@@ -124,6 +134,15 @@ def point_camera_at_target(camera: bpy.types.Object, target_location: Vector):
     constraint.target = track_target
     constraint.track_axis = 'TRACK_NEGATIVE_Z'
     constraint.up_axis = 'UP_Y'
+
+    # Proactively set the orientation so it already faces the target
+    try:
+        direction = (target_location - camera.location)
+        if direction.length > 0:
+            quat = direction.to_track_quat('-Z', 'Y')
+            camera.rotation_euler = quat.to_euler('XYZ')
+    except Exception:
+        pass
 
 def configure_camera(camera: bpy.types.Object, props):
     """

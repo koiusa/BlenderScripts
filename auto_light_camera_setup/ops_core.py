@@ -10,6 +10,8 @@ from . import util_camera
 from . import util_lighting
 from . import util_floor
 from . import util_world
+from . import util_rig
+from . import util_collections
 
 class ALCS_OT_auto_setup(Operator):
     """Automatically set up lighting, camera, and environment"""
@@ -22,6 +24,12 @@ class ALCS_OT_auto_setup(Operator):
         props = context.scene.auto_setup_props
         
         try:
+            # Ensure collections exist up-front and sync depsgraph
+            util_collections.ensure_autosetup_collections()
+            try:
+                bpy.context.view_layer.update()
+            except Exception:
+                pass
             # Validate targets
             if not util_bounds.validate_targets(props):
                 self.report({'ERROR'}, "No valid target objects found")
@@ -32,10 +40,18 @@ class ALCS_OT_auto_setup(Operator):
             
             # Set up lighting
             util_lighting.setup_three_point_lighting(props, bounds_info)
+            try:
+                bpy.context.view_layer.update()
+            except Exception:
+                pass
             
             # Set up camera
             camera = util_camera.position_camera_auto(props, bounds_info, "FRONT")
             util_camera.set_active_camera(camera)
+            try:
+                bpy.context.view_layer.update()
+            except Exception:
+                pass
             
             # Set up floor if enabled
             if props.add_floor:
@@ -46,6 +62,9 @@ class ALCS_OT_auto_setup(Operator):
             
             # Configure render settings
             util_world.setup_render_settings(props)
+
+            # Parent cameras/lights to locator for unified manipulation
+            util_rig.parent_autosetup_objects_to_locator(bounds_info)
             
             self.report({'INFO'}, "Auto setup completed successfully")
             return {'FINISHED'}
@@ -83,6 +102,9 @@ class ALCS_OT_generate_multi_shots(Operator):
             # Render shots if requested
             if props.render_shots:
                 self.render_multiple_shots(context, cameras, props)
+
+            # Ensure cameras (and lights if present) are parented under the locator
+            util_rig.parent_autosetup_objects_to_locator(bounds_info)
             
             self.report({'INFO'}, f"Generated {len(cameras)} camera shots")
             return {'FINISHED'}

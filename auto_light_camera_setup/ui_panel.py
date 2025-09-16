@@ -94,7 +94,6 @@ class ALCS_PT_auto_setup_panel(Panel):
         
         col = box.column(align=True)
         col.operator("alcs.auto_setup", text="Auto Setup", icon='AUTO')
-        col.operator("alcs.generate_multi_shots", text="Generate Multi-Shots", icon='CAMERA_DATA')
         
         row = box.row(align=True)
         row.operator("alcs.create_studio_setup", text="Studio Setup", icon='LIGHT')
@@ -123,21 +122,21 @@ class ALCS_PT_auto_setup_panel(Panel):
         col.prop(props, "light_key_intensity")
         col.prop(props, "light_fill_intensity")
         col.prop(props, "light_rim_intensity")
-    
+
     def draw_environment_section(self, layout, props):
         """Draw environment settings section"""
         box = layout.box()
         box.label(text="Environment", icon='WORLD')
-        
+
         col = box.column()
-        
+
         # Floor settings
         col.prop(props, "add_floor")
         if props.add_floor:
             col.prop(props, "floor_material_color")
-        
+
         col.separator()
-        
+
         # World/HDRI settings
         col.prop(props, "use_hdri")
         if props.use_hdri:
@@ -145,9 +144,9 @@ class ALCS_PT_auto_setup_panel(Panel):
             col.prop(props, "hdri_strength")
         else:
             col.prop(props, "world_strength")
-        
+
         col.separator()
-        
+
         # Render settings
         col.prop(props, "enable_filmic")
         col.prop(props, "exposure")
@@ -158,14 +157,22 @@ class ALCS_PT_auto_setup_panel(Panel):
         box.label(text="Multi-Shot & Batch", icon='RENDER_ANIMATION')
         
         col = box.column()
+        # Shot settings and single-target multi-shot (集約)
+        col.label(text="Shots", icon='CAMERA_DATA')
         col.prop(props, "shot_types")
         col.prop(props, "render_shots")
-        
+        col.operator("alcs.generate_multi_shots", text="Generate Multi-Shots (Current Target)", icon='CAMERA_DATA')
+        col.label(text="現在の選択またはターゲットコレクションに対して実行", icon='INFO')
         col.separator()
-        
+
         col.prop(props, "batch_mode")
         if props.batch_mode:
+            col.label(text="選択したコレクション群に対し、カメラ設定のショット構成でマルチショットを実行", icon='INFO')
             col.prop(props, "collection_filter")
+            col.label(text="Filterの使い方: 名前の部分一致・大文字小文字無視。空欄=全件。子コレクションも対象。", icon='INFO')
+            col.prop(props, "batch_target_collection")
+            # Show matching collections
+            draw_collection_list(box, props.collection_filter)
             col.prop(props, "render_per_collection")
         
         col.separator()
@@ -173,7 +180,7 @@ class ALCS_PT_auto_setup_panel(Panel):
         
         # Batch operations
         col.separator()
-        col.operator("alcs.batch_process", text="Batch Process Collections", icon='PLAY')
+        col.operator("alcs.batch_process", text="Process Collections (Multi-Shots)", icon='PLAY')
         col.operator("alcs.batch_render_all_cameras", text="Render All Cameras", icon='RENDER_STILL')
     
     def draw_utilities_section(self, layout):

@@ -6,7 +6,7 @@ Provides automatic lighting, camera positioning, and batch rendering capabilitie
 bl_info = {
     "name": "Auto Light Camera Setup",
     "author": "Blender Scripts",
-    "version": (1, 0, 0),
+    "version": (1, 0, 1),
     "blender": (4, 0, 0),
     "location": "View3D > Sidebar > Auto Setup",
     "description": "Automatic lighting, camera setup, multi-shot generation, and batch processing",
@@ -25,8 +25,17 @@ classes = (
     presets.ALCS_OT_apply_preset,
     ops_core.ALCS_OT_auto_setup,
     ops_core.ALCS_OT_generate_multi_shots,
+    ops_core.ALCS_OT_cleanup_auto_objects,
+    ops_core.ALCS_OT_focus_camera_on_selection,
+    ops_core.ALCS_OT_quick_render_current,
+    ops_core.ALCS_OT_create_studio_setup,
     ops_batch.ALCS_OT_batch_process,
+    ops_batch.ALCS_OT_batch_render_all_cameras,
+    ops_batch.ALCS_OT_setup_collection_shots,
+    ops_batch.ALCS_OT_export_batch_config,
     ui_panel.ALCS_PT_auto_setup_panel,
+    ui_panel.ALCS_PT_advanced_panel,
+    ui_panel.ALCS_PT_info_panel,
 )
 
 def register():

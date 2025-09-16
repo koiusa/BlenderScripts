@@ -173,6 +173,21 @@ class AutoSetupProperties(bpy.types.PropertyGroup):
         description="Filter collections by name (empty = all)",
         default=""
     )
+
+    def batch_collection_items(self, context):
+        import bpy
+        items = []
+        for c in bpy.data.collections:
+            items.append((c.name, c.name, ""))
+        if not items:
+            items = [("", "No collections found", "")]
+        return items
+
+    batch_target_collection: EnumProperty(
+        name="Batch Target Collection",
+        description="Collection to process in batch mode",
+        items=batch_collection_items
+    )
     
     render_per_collection: BoolProperty(
         name="Render Per Collection",

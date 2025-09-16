@@ -6,6 +6,7 @@ Handles automatic floor plane creation and material setup.
 import bpy
 import bmesh
 from mathutils import Vector
+from . import util_collections
 
 def create_or_get_floor(name: str = "AutoSetup_Floor") -> bpy.types.Object:
     """
@@ -23,7 +24,13 @@ def create_or_get_floor(name: str = "AutoSetup_Floor") -> bpy.types.Object:
         # Create new floor mesh
         mesh = bpy.data.meshes.new(name + "_Mesh")
         floor_obj = bpy.data.objects.new(name, mesh)
-        bpy.context.collection.objects.link(floor_obj)
+        # Link to AutoSetup root collection to avoid context.collection dependency
+        root_col, _ = util_collections.ensure_autosetup_collections()
+        # ensure_autosetup_collections returns (cams, lights); we only need root existence, so link to scene root too
+        try:
+            bpy.context.scene.collection.objects.link(floor_obj)
+        except RuntimeError:
+            pass
     
     return floor_obj
 
@@ -70,6 +77,8 @@ def create_floor_mesh(floor_obj: bpy.types.Object, size: float, location: Vector
         location: Center location of the floor
     """
     mesh = floor_obj.data
+    # スケールをリセットして累積拡大を防ぐ
+    floor_obj.scale = (1, 1, 1)
     
     # Clear existing mesh
     mesh.clear_geometry()

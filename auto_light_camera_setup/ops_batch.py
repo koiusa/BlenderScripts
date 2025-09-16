@@ -11,6 +11,7 @@ from . import util_camera
 from . import util_lighting
 from . import util_floor
 from . import util_world
+from . import util_rig
 
 class ALCS_OT_batch_process(Operator):
     """Process multiple collections in batch mode"""
@@ -57,20 +58,20 @@ class ALCS_OT_batch_process(Operator):
     
     def get_target_collections(self, props):
         """Get list of collections to process based on filter"""
+        # If a specific batch target collection is chosen, prioritize it
+        if hasattr(props, 'batch_target_collection') and props.batch_target_collection:
+            chosen = bpy.data.collections.get(props.batch_target_collection)
+            return [chosen] if chosen else []
+
         collections = []
-        
         for collection in bpy.data.collections:
-            # Skip if collection has no objects
+            # Skip if collection has no (direct or nested) mesh objects
             if not self.collection_has_mesh_objects(collection):
                 continue
-            
-            # Apply filter if specified
-            if props.collection_filter:
-                if props.collection_filter.lower() not in collection.name.lower():
-                    continue
-            
+            # Apply filter if specified (case-insensitive, substring)
+            if props.collection_filter and props.collection_filter.lower() not in collection.name.lower():
+                continue
             collections.append(collection)
-        
         return collections
     
     def collection_has_mesh_objects(self, collection):
@@ -122,6 +123,9 @@ class ALCS_OT_batch_process(Operator):
             # Set up world environment
             util_world.setup_world_environment(props)
             
+            # Parent under locator for unified manipulation
+            util_rig.parent_autosetup_objects_to_locator(bounds_info)
+
             # Render if requested
             if props.render_per_collection:
                 self.render_collection_shots(context, collection, cameras, props)
@@ -263,6 +267,9 @@ class ALCS_OT_setup_collection_shots(Operator):
             
             # Configure render settings
             util_world.setup_render_settings(props)
+
+            # Parent under locator for unified manipulation
+            util_rig.parent_autosetup_objects_to_locator(bounds_info)
             
         finally:
             # Restore original settings
@@ -350,21 +357,22 @@ def get_collections_for_batch(collection_filter: str = "") -> list:
     """
     collections = []
     
-    for collection in bpy.data.collections:
-        # Check if collection has mesh objects
-        has_mesh = False
-        for obj in collection.objects:
+    def has_mesh_recursive(col):
+        # direct objects
+        for obj in col.objects:
             if obj.type == 'MESH':
-                has_mesh = True
-                break
-        
-        if not has_mesh:
+                return True
+        # children
+        for child in col.children:
+            if has_mesh_recursive(child):
+                return True
+        return False
+
+    for collection in bpy.data.collections:
+        if not has_mesh_recursive(collection):
             continue
-        
-        # Apply filter
         if collection_filter and collection_filter.lower() not in collection.name.lower():
             continue
-        
         collections.append(collection.name)
     
     return collections

@@ -8,6 +8,8 @@ import bmesh
 from mathutils import Vector
 from typing import List, Tuple, Optional
 
+AUTOSETUP_FLOOR_NAMES = {"AutoSetup_Floor", "AutoSetup_InfiniteFloor"}
+
 def get_target_objects(props) -> List[bpy.types.Object]:
     """
     Get target objects based on current selection or specified collection.
@@ -21,9 +23,9 @@ def get_target_objects(props) -> List[bpy.types.Object]:
     objects = []
     
     if props.use_selection and bpy.context.selected_objects:
-        # Use selected objects
-        objects = [obj for obj in bpy.context.selected_objects 
-                  if obj.type == 'MESH']
+        # Use selected objects (exclude AutoSetup floors)
+        objects = [obj for obj in bpy.context.selected_objects
+                  if obj.type == 'MESH' and obj.name not in AUTOSETUP_FLOOR_NAMES]
     elif props.target_collection:
         # Use specified collection
         collection = bpy.data.collections.get(props.target_collection)
@@ -31,8 +33,8 @@ def get_target_objects(props) -> List[bpy.types.Object]:
             objects = get_objects_in_collection(collection)
     else:
         # Use all visible mesh objects in scene
-        objects = [obj for obj in bpy.context.scene.objects 
-                  if obj.type == 'MESH' and obj.visible_get()]
+        objects = [obj for obj in bpy.context.scene.objects
+                  if obj.type == 'MESH' and obj.visible_get() and obj.name not in AUTOSETUP_FLOOR_NAMES]
     
     return objects
 
@@ -50,7 +52,7 @@ def get_objects_in_collection(collection) -> List[bpy.types.Object]:
     
     # Add objects from current collection
     for obj in collection.objects:
-        if obj.type == 'MESH':
+        if obj.type == 'MESH' and obj.name not in AUTOSETUP_FLOOR_NAMES:
             objects.append(obj)
     
     # Recursively add objects from child collections
