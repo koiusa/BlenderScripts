@@ -9,6 +9,7 @@ import math
 from . import util_collections
 from . import util_rig
 from .debug_utils import debugger, log_object_state
+from .constants import TRACK_TO_CONSTRAINT
 
 def create_or_get_light(name: str, light_type: str = 'AREA') -> bpy.types.Object:
     """Create a new light or get existing one by name."""
@@ -49,43 +50,45 @@ def setup_three_point_lighting(props, bounds_info: dict):
     def _is_rigged(obj: bpy.types.Object) -> bool:
         return util_rig.is_light_rigged(obj)
 
-    # Key Light (main light)
+    def place_or_skip(obj: bpy.types.Object, target_pos: Vector, energy: float, size: float, op: str):
+        log_object_state(obj, "setup_three_point_lighting", f"{op}_initial")
+        if not _is_rigged(obj):
+            util_rig.safe_set_world_position(obj, target_pos, f"{op}_position")
+            point_light_at_target(obj, center)
+        else:
+            debugger.info(f"Skipping position for rigged light {obj.name}")
+        obj.data.energy = energy
+        obj.data.size = size
+
+    # Key / Fill / Rim
     key_light = create_or_get_light("AutoSetup_KeyLight", 'AREA')
-    log_object_state(key_light, "setup_three_point_lighting", "key_light_initial")
-    if not _is_rigged(key_light):
-        target_pos = center + Vector((-light_distance * 0.7, -light_distance, light_height))
-        util_rig.safe_set_world_position(key_light, target_pos, "key_light_position")
-        point_light_at_target(key_light, center)
-    else:
-        debugger.info(f"Skipping position for rigged light {key_light.name}")
-    key_light.data.energy = props.light_key_intensity
-    key_light.data.size = max_dimension * 0.5
-    
-    # Fill Light (softer, opposite side)
+    place_or_skip(
+        key_light,
+        center + Vector((-light_distance * 0.7, -light_distance, light_height)),
+        props.light_key_intensity,
+        max_dimension * 0.5,
+        "key_light",
+    )
+
     fill_light = create_or_get_light("AutoSetup_FillLight", 'AREA')
-    log_object_state(fill_light, "setup_three_point_lighting", "fill_light_initial")
-    if not _is_rigged(fill_light):
-        target_pos = center + Vector((light_distance * 0.5, -light_distance * 0.3, light_height * 0.8))
-        util_rig.safe_set_world_position(fill_light, target_pos, "fill_light_position")
-        point_light_at_target(fill_light, center)
-    else:
-        debugger.info(f"Skipping position for rigged light {fill_light.name}")
-    fill_light.data.energy = props.light_fill_intensity
-    fill_light.data.size = max_dimension * 0.8
-    
-    # Rim Light (back light for edge definition)
+    place_or_skip(
+        fill_light,
+        center + Vector((light_distance * 0.5, -light_distance * 0.3, light_height * 0.8)),
+        props.light_fill_intensity,
+        max_dimension * 0.8,
+        "fill_light",
+    )
+
     rim_side = determine_rim_light_side(bounds_info)
     rim_x = light_distance * rim_side
     rim_light = create_or_get_light("AutoSetup_RimLight", 'AREA')
-    log_object_state(rim_light, "setup_three_point_lighting", "rim_light_initial")
-    if not _is_rigged(rim_light):
-        target_pos = center + Vector((rim_x, light_distance * 0.8, light_height * 1.2))
-        util_rig.safe_set_world_position(rim_light, target_pos, "rim_light_position")
-        point_light_at_target(rim_light, center)
-    else:
-        debugger.info(f"Skipping position for rigged light {rim_light.name}")
-    rim_light.data.energy = props.light_rim_intensity
-    rim_light.data.size = max_dimension * 0.3
+    place_or_skip(
+        rim_light,
+        center + Vector((rim_x, light_distance * 0.8, light_height * 1.2)),
+        props.light_rim_intensity,
+        max_dimension * 0.3,
+        "rim_light",
+    )
     
     debugger.info("Completed setup_three_point_lighting")
 
@@ -119,7 +122,7 @@ def point_light_at_target(light: bpy.types.Object, target_location: Vector):
     
     if constraint is None:
         constraint = light.constraints.new(type='TRACK_TO')
-        constraint.name = "AutoSetup_TrackTo"
+        constraint.name = TRACK_TO_CONSTRAINT
     
     constraint.target = track_target
     constraint.track_axis = 'TRACK_NEGATIVE_Z'

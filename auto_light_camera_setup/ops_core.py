@@ -26,7 +26,7 @@ class ALCS_OT_auto_setup(Operator):
         props = context.scene.auto_setup_props
         
         debugger.info("=== Auto Setup Started ===")
-        # Pre-execution rig state verification
+        # Pre-execution rig state verification（シンプル化）
         initial_state = verify_rig_consistency("auto_setup_start")
         
         try:
@@ -44,28 +44,15 @@ class ALCS_OT_auto_setup(Operator):
             # Get bounds information
             bounds_info = util_bounds.get_bounds_info(props)
             debugger.info(f"Bounds info: center={bounds_info.get('center')}, max_dimension={bounds_info.get('max_dimension')}")
-            
-            # Configure debug settings based on properties
-            if props.debug_mode:
-                debugger.info("Debug mode enabled")
-            if props.debug_coordinate_changes:
-                debugger.info("Coordinate change logging enabled")
-            
-            # Step 1: Set up lighting
-            if props.step_execution_mode:
-                debugger.info("=== Step 1: Setting up lighting ===")
+
+            # Lighting
             util_lighting.setup_three_point_lighting(props, bounds_info)
             try:
                 bpy.context.view_layer.update()
             except Exception:
                 pass
-            if props.step_execution_mode:
-                post_lighting_state = verify_rig_consistency("post_lighting")
-                debugger.info(f"Lighting setup completed. Rig consistency: {post_lighting_state}")
-            
-            # Step 2: Set up camera(s) according to shot_types
-            if props.step_execution_mode:
-                debugger.info("=== Step 2: Setting up cameras ===")
+
+            # Camera(s)
             if props.shot_types == 'FRONT':
                 camera = util_camera.position_camera_auto(props, bounds_info, "FRONT")
                 util_camera.set_active_camera(camera)
@@ -77,36 +64,17 @@ class ALCS_OT_auto_setup(Operator):
                 bpy.context.view_layer.update()
             except Exception:
                 pass
-            if props.step_execution_mode:
-                post_camera_state = verify_rig_consistency("post_camera")
-                debugger.info(f"Camera setup completed. Rig consistency: {post_camera_state}")
             
-            # Step 3: Set up floor if enabled
+            # Floor
             if props.add_floor:
-                if props.step_execution_mode:
-                    debugger.info("=== Step 3: Setting up floor ===")
                 util_floor.setup_floor(props, bounds_info)
-                if props.step_execution_mode:
-                    post_floor_state = verify_rig_consistency("post_floor")
-                    debugger.info(f"Floor setup completed. Rig consistency: {post_floor_state}")
             
-            # Step 4: Set up world environment
-            if props.step_execution_mode:
-                debugger.info("=== Step 4: Setting up world environment ===")
+            # World and render settings
             util_world.setup_world_environment(props)
-            
-            # Step 5: Configure render settings
-            if props.step_execution_mode:
-                debugger.info("=== Step 5: Configuring render settings ===")
             util_world.setup_render_settings(props)
 
-            # Step 6: Parent cameras/lights to locator for unified manipulation
-            if props.step_execution_mode:
-                debugger.info("=== Step 6: Setting up rig parenting ===")
+            # Parent under locator
             util_rig.parent_autosetup_objects_to_locator(bounds_info)
-            if props.step_execution_mode:
-                post_rig_state = verify_rig_consistency("post_rig_setup")
-                debugger.info(f"Rig setup completed. Rig consistency: {post_rig_state}")
             
             # Post-execution rig state verification
             final_state = verify_rig_consistency("auto_setup_end")

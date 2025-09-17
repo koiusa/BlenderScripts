@@ -4,7 +4,6 @@ Handles camera positioning, configuration, and multi-shot generation.
 """
 
 import bpy
-import bmesh
 from mathutils import Vector, Euler
 import math
 from typing import List, Optional, Dict, Any
@@ -63,40 +62,29 @@ def position_camera_auto(props, bounds_info: dict, shot_type: str = "FRONT") -> 
     already_rigged = util_rig.is_camera_rigged(camera)
     debugger.info(f"Camera {camera.name} rigged status: {already_rigged}")
 
-    # Shot-specific positioning (skip entirely for rigged cameras)
-    if already_rigged:
-        debugger.info(f"Skipping position for rigged camera {camera.name}")
+    # Shot-specific positioning（リグ済カメラは位置決めを完全スキップ）
+    if not already_rigged:
+        def calc_pos_and_rot(shot: str):
+            if shot == "FRONT":
+                return center + Vector((0, -distance, 0)), Euler((math.radians(90), 0, 0), 'XYZ')
+            if shot == "3Q_L":
+                ang = math.radians(45)
+                return center + Vector((-distance * math.sin(ang), -distance * math.cos(ang), distance * 0.3)), Euler((math.radians(75), 0, math.radians(-45)), 'XYZ')
+            if shot == "3Q_R":
+                ang = math.radians(45)
+                return center + Vector((distance * math.sin(ang), -distance * math.cos(ang), distance * 0.3)), Euler((math.radians(75), 0, math.radians(45)), 'XYZ')
+            if shot == "TOP":
+                return center + Vector((0, 0, distance)), Euler((0, 0, 0), 'XYZ')
+            if shot == "LOW":
+                return center + Vector((0, -distance * 1.2, -max_dimension * 0.3)), Euler((math.radians(100), 0, 0), 'XYZ')
+            # default fallback (front-like)
+            return center + Vector((0, -distance, 0)), Euler((math.radians(90), 0, 0), 'XYZ')
+
+        target_pos, target_rot = calc_pos_and_rot(shot_type)
+        util_rig.safe_set_world_position(camera, target_pos, f"camera_position_{shot_type}")
+        camera.rotation_euler = target_rot
     else:
-        if shot_type == "FRONT":
-            target_pos = center + Vector((0, -distance, 0))
-            util_rig.safe_set_world_position(camera, target_pos, f"camera_position_{shot_type}")
-            camera.rotation_euler = Euler((math.radians(90), 0, 0), 'XYZ')
-        elif shot_type == "3Q_L":
-            angle = math.radians(45)
-            target_pos = center + Vector((
-                -distance * math.sin(angle),
-                -distance * math.cos(angle),
-                distance * 0.3
-            ))
-            util_rig.safe_set_world_position(camera, target_pos, f"camera_position_{shot_type}")
-            camera.rotation_euler = Euler((math.radians(75), 0, math.radians(-45)), 'XYZ')
-        elif shot_type == "3Q_R":
-            angle = math.radians(45)
-            target_pos = center + Vector((
-                distance * math.sin(angle),
-                -distance * math.cos(angle),
-                distance * 0.3
-            ))
-            util_rig.safe_set_world_position(camera, target_pos, f"camera_position_{shot_type}")
-            camera.rotation_euler = Euler((math.radians(75), 0, math.radians(45)), 'XYZ')
-        elif shot_type == "TOP":
-            target_pos = center + Vector((0, 0, distance))
-            util_rig.safe_set_world_position(camera, target_pos, f"camera_position_{shot_type}")
-            camera.rotation_euler = Euler((0, 0, 0), 'XYZ')
-        elif shot_type == "LOW":
-            target_pos = center + Vector((0, -distance * 1.2, -max_dimension * 0.3))
-            util_rig.safe_set_world_position(camera, target_pos, f"camera_position_{shot_type}")
-            camera.rotation_euler = Euler((math.radians(100), 0, 0), 'XYZ')
+        debugger.info(f"Skipping position for rigged camera {camera.name}")
     
     # Point camera at target center (skip for rigged cameras)
     if not already_rigged:
@@ -136,7 +124,7 @@ def point_camera_at_target(camera: bpy.types.Object, target_location: Vector):
     
     if constraint is None:
         constraint = camera.constraints.new(type='TRACK_TO')
-        constraint.name = "AutoSetup_TrackTo"
+        constraint.name = TRACK_TO_CONSTRAINT
     
     constraint.target = track_target
     constraint.track_axis = 'TRACK_NEGATIVE_Z'
