@@ -219,22 +219,3 @@ class AutoSetupProperties(bpy.types.PropertyGroup):
         default="",
         subtype='DIR_PATH'
     )
-    
-    # Debug and Development Settings
-    debug_mode: BoolProperty(
-        name="Debug Mode",
-        description="Enable detailed debug logging and state verification",
-        default=False
-    )
-    
-    step_execution_mode: BoolProperty(
-        name="Step Execution Mode",
-        description="Execute Auto Setup in steps with verification between each phase",
-        default=False
-    )
-    
-    debug_coordinate_changes: BoolProperty(
-        name="Log Coordinate Changes",
-        description="Log all coordinate changes during setup for position drift analysis",
-        default=False
-    )

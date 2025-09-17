@@ -148,14 +148,13 @@ class ALCS_PT_auto_setup_panel(Panel):
         col.prop(props, "shot_types")
         col.prop(props, "render_shots")
         col.prop(props, "batch_mode")
-        if props.batch_mode:
-            col.label(text="選択したコレクション群に対し、カメラ設定のショット構成でマルチショットを実行", icon='INFO')
-            col.prop(props, "collection_filter")
-            col.label(text="Filterの使い方: 名前の部分一致・大文字小文字無視。空欄=全件。子コレクションも対象。", icon='INFO')
-            col.prop(props, "batch_target_collection")
-            # Show matching collections
-            draw_collection_list(box, props.collection_filter)
-            col.prop(props, "render_per_collection")
+        col.label(text="選択したコレクション群に対し、カメラ設定のショット構成でマルチショットを実行", icon='INFO')
+        col.prop(props, "collection_filter")
+        col.label(text="Filterの使い方: 名前の部分一致・大文字小文字無視。空欄=全件。子コレクションも対象。", icon='INFO')
+        col.prop(props, "batch_target_collection")
+        # Show matching collections
+        draw_collection_list(box, props.collection_filter)
+        col.prop(props, "render_per_collection")
         
         # 出力先と実行
         col.separator()
@@ -164,11 +163,11 @@ class ALCS_PT_auto_setup_panel(Panel):
 
         # 実行ボタンを下部にまとめる
         box.separator()
+        row = box.row(align=True)
+        row.operator("alcs.generate_multi_shots", text="Generate Multi-Shots", icon='CAMERA_DATA')
         box.operator("alcs.process_existing_shots", text="Process (Current Target)", icon='PLAY')
-        if props.batch_mode:
-            row = box.row(align=True)
-            row.operator("alcs.batch_process", text="Process (Collections)", icon='PLAY')
-            row.operator("alcs.background_batch_process", text="Run in Background", icon='SEQUENCE_COLOR_02')
+        row = box.row(align=True)
+        row.operator("alcs.batch_process", text="Process (Collections)", icon='PLAY')
     
     def draw_utilities_section(self, layout):
         """Draw utilities section"""
@@ -177,15 +176,7 @@ class ALCS_PT_auto_setup_panel(Panel):
         
         col = box.column(align=True)
         col.operator("alcs.focus_camera_on_selection", text="Focus on Selection", icon='ZOOM_SELECTED')
-        col.operator("alcs.quick_render_current", text="Quick Render", icon='RENDER_STILL')
-        
-        col.separator()
-        col.operator("alcs.export_batch_config", text="Export Config", icon='EXPORT')
-
-        col.separator()
-        row = box.row(align=True)
-        row.operator("alcs.create_control_rig", text="Create Control Rig", icon='CURVE_DATA')
-        row.operator("alcs.delete_control_rig", text="Delete Control Rig", icon='TRASH')
+        col.operator("alcs.reload_addon", text="Reload Add-on", icon='FILE_REFRESH')
 
 class ALCS_PT_advanced_panel(Panel):
     """Advanced settings panel"""

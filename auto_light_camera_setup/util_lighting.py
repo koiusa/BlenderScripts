@@ -172,38 +172,3 @@ def adjust_light_intensity(light_name: str, intensity: float):
     light = bpy.data.objects.get(light_name)
     if light and light.type == 'LIGHT':
         light.data.energy = intensity
-
-def create_studio_lighting(props, bounds_info: dict):
-    """
-    Create a more complex studio lighting setup.
-    
-    Args:
-        props: AutoSetupProperties instance
-        bounds_info: Bounds information from util_bounds
-    """
-    center = bounds_info['center']
-    max_dimension = bounds_info['max_dimension']
-    
-    # Main key light (large softbox equivalent)
-    key_light = create_or_get_light("AutoSetup_StudioKey", 'AREA')
-    key_light.location = center + Vector((-max_dimension * 1.5, -max_dimension * 2.0, max_dimension * 1.8))
-    key_light.data.energy = props.light_key_intensity * 1.5
-    key_light.data.size = max_dimension
-    key_light.data.shape = 'RECTANGLE'
-    key_light.data.size_y = max_dimension * 0.7
-    point_light_at_target(key_light, center)
-    
-    # Fill light (opposite side, softer)
-    fill_light = create_or_get_light("AutoSetup_StudioFill", 'AREA')
-    fill_light.location = center + Vector((max_dimension * 1.2, -max_dimension * 1.5, max_dimension * 1.2))
-    fill_light.data.energy = props.light_fill_intensity * 0.8
-    fill_light.data.size = max_dimension * 1.2
-    point_light_at_target(fill_light, center)
-    
-    # Rim light (back)
-    rim_light = create_or_get_light("AutoSetup_StudioRim", 'SPOT')
-    rim_light.location = center + Vector((0, max_dimension * 1.5, max_dimension * 2.0))
-    rim_light.data.energy = props.light_rim_intensity * 2.0
-    rim_light.data.spot_size = math.radians(45)
-    rim_light.data.spot_blend = 0.3
-    point_light_at_target(rim_light, center)

@@ -104,56 +104,6 @@ def setup_basic_world(world: bpy.types.World, props):
     # Connect nodes
     links.new(background_node.outputs['Background'], output_node.inputs['Surface'])
 
-def setup_studio_world(props):
-    """
-    Set up a studio-style world environment with gradient.
-    
-    Args:
-        props: AutoSetupProperties instance
-    """
-    world = bpy.context.scene.world
-    
-    if world is None:
-        world = bpy.data.worlds.new("AutoSetup_StudioWorld")
-        bpy.context.scene.world = world
-    
-    world.use_nodes = True
-    nodes = world.node_tree.nodes
-    links = world.node_tree.links
-    
-    # Clear existing nodes
-    nodes.clear()
-    
-    # Create nodes
-    output_node = nodes.new(type='ShaderNodeOutputWorld')
-    output_node.location = (600, 0)
-    
-    background_node = nodes.new(type='ShaderNodeBackground')
-    background_node.location = (300, 0)
-    background_node.inputs['Strength'].default_value = props.world_strength
-    
-    # Color ramp for gradient
-    colorramp_node = nodes.new(type='ShaderNodeValToRGB')
-    colorramp_node.location = (0, 0)
-    
-    # Set gradient colors (light to dark from top to bottom)
-    colorramp_node.color_ramp.elements[0].color = (0.8, 0.8, 0.9, 1.0)  # Light blue-gray
-    colorramp_node.color_ramp.elements[1].color = (0.2, 0.2, 0.3, 1.0)  # Dark blue-gray
-    
-    # Texture coordinate for gradient direction
-    tex_coord_node = nodes.new(type='ShaderNodeTexCoord')
-    tex_coord_node.location = (-300, 0)
-    
-    # Separate XYZ to get Z coordinate (vertical gradient)
-    separate_xyz_node = nodes.new(type='ShaderNodeSeparateXYZ')
-    separate_xyz_node.location = (-150, 0)
-    
-    # Connect nodes
-    links.new(tex_coord_node.outputs['Generated'], separate_xyz_node.inputs['Vector'])
-    links.new(separate_xyz_node.outputs['Z'], colorramp_node.inputs['Fac'])
-    links.new(colorramp_node.outputs['Color'], background_node.inputs['Color'])
-    links.new(background_node.outputs['Background'], output_node.inputs['Surface'])
-
 def setup_render_settings(props):
     """
     Configure render settings for optimal results.

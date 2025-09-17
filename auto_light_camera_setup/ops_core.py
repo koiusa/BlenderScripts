@@ -244,167 +244,50 @@ class ALCS_OT_focus_camera_on_selection(Operator):
             self.report({'ERROR'}, f"Focus operation failed: {str(e)}")
             return {'CANCELLED'}
 
-class ALCS_OT_quick_render_current(Operator):
-    """Quick render from current camera"""
-    bl_idname = "alcs.quick_render_current"
-    bl_label = "Quick Render"
-    bl_description = "Render current view to output path"
-    bl_options = {'REGISTER', 'UNDO'}
-    
-    def execute(self, context):
-        try:
-            props = context.scene.auto_setup_props
-            camera = context.scene.camera
-            
-            if not camera:
-                self.report({'ERROR'}, "No active camera in scene")
-                return {'CANCELLED'}
-            
-            # Generate output path
-            import os
-            from .utils import get_timestamp
-            
-            base_path = resolve_output_path(props.output_path)
-            if not os.path.exists(base_path):
-                os.makedirs(base_path, exist_ok=True)
-            
-            ts = get_timestamp()
-            filename = f"quick_render_{ts}.png"
-            output_path = os.path.join(base_path, filename)
-            
-            # Render
-            util_camera.render_camera_shot(camera, output_path)
-            
-            self.report({'INFO'}, f"Rendered to: {filename}")
-            return {'FINISHED'}
-            
-        except Exception as e:
-            self.report({'ERROR'}, f"Render failed: {str(e)}")
-            return {'CANCELLED'}
-
-class ALCS_OT_process_existing_shots(Operator):
-    """Process existing AutoSetup cameras (no new creation)"""
-    bl_idname = "alcs.process_existing_shots"
-    bl_label = "Process Existing Shots"
-    bl_description = "Render/activate existing AutoSetup cameras for current shot types"
-    bl_options = {'REGISTER', 'UNDO'}
+class ALCS_OT_reload_addon(Operator):
+    """Reload this add-on without restarting Blender"""
+    bl_idname = "alcs.reload_addon"
+    bl_label = "Reload Add-on"
+    bl_description = "Reload Auto Light Camera Setup in-place (unregister -> reload modules -> register)"
+    bl_options = {'REGISTER'}
 
     def execute(self, context):
-        props = context.scene.auto_setup_props
+        import sys
+        import importlib
         try:
-            # Determine desired shot labels
-            if props.shot_types == 'ALL':
-                desired = ['FRONT', '3Q_L', '3Q_R', 'TOP', 'LOW']
-            elif props.shot_types == 'FRONT':
-                desired = ['FRONT']
-            elif props.shot_types == '3Q':
-                desired = ['3Q_L', '3Q_R']
-            else:
-                desired = ['FRONT', '3Q_L', '3Q_R', 'TOP', 'LOW']
+            # Package name (folder name of the add-on)
+            pkg_name = __name__.split('.')[0]
 
-            cameras = []
-            for obj in context.scene.objects:
-                if obj.type == 'CAMERA' and obj.name.startswith("AutoSetup_Camera_"):
-                    if any(f"_{lab}" in obj.name for lab in desired):
-                        cameras.append(obj)
+            # Unregister if available (ignore failures)
+            pkg = sys.modules.get(pkg_name)
+            try:
+                if pkg and hasattr(pkg, 'unregister'):
+                    pkg.unregister()
+            except Exception:
+                pass
 
-            if not cameras:
-                self.report({'INFO'}, "No existing AutoSetup cameras for current shot types")
-                return {'FINISHED'}
+            # Reload submodules (deepest first)
+            module_names = [m for m in list(sys.modules.keys()) if m == pkg_name or m.startswith(pkg_name + ".")]
+            module_names.sort(key=len, reverse=True)
+            for mod_name in module_names:
+                mod = sys.modules.get(mod_name)
+                if mod is None:
+                    continue
+                try:
+                    importlib.reload(mod)
+                except Exception as e:
+                    print(f"[ALCS] Failed to reload {mod_name}: {e}")
 
-            if props.render_shots:
-                self.render_existing(context, cameras, props)
-            else:
-                util_camera.set_active_camera(cameras[0])
+            # Ensure top-level is imported and register again
+            pkg = sys.modules.get(pkg_name)
+            if pkg is None:
+                pkg = importlib.import_module(pkg_name)
+            if hasattr(pkg, 'register'):
+                pkg.register()
 
-            self.report({'INFO'}, f"Processed {len(cameras)} existing cameras")
+            self.report({'INFO'}, "Add-on reloaded successfully")
             return {'FINISHED'}
         except Exception as e:
-            self.report({'ERROR'}, f"Processing existing shots failed: {e}")
+            self.report({'ERROR'}, f"Reload failed: {e}")
             return {'CANCELLED'}
 
-    def render_existing(self, context, cameras, props):
-        import os
-        base_path = resolve_output_path(props.output_path)
-        os.makedirs(base_path, exist_ok=True)
-        ts = get_timestamp()
-        for i, camera in enumerate(cameras):
-            shot_type = camera.name.split('_')[-1] if '_' in camera.name else f"shot_{i+1}"
-            filename = f"shot_{shot_type}_{ts}.png"
-            output_path = os.path.join(base_path, filename)
-            util_camera.render_camera_shot(camera, output_path)
-
-class ALCS_OT_create_studio_setup(Operator):
-    """Create a more advanced studio lighting setup"""
-    bl_idname = "alcs.create_studio_setup"
-    bl_label = "Studio Setup"
-    bl_description = "Create advanced studio lighting with multiple area lights"
-    bl_options = {'REGISTER', 'UNDO'}
-    
-    def execute(self, context):
-        props = context.scene.auto_setup_props
-        
-        try:
-            # Validate targets
-            if not util_bounds.validate_targets(props):
-                self.report({'ERROR'}, "No valid target objects found")
-                return {'CANCELLED'}
-            
-            # Get bounds information
-            bounds_info = util_bounds.get_bounds_info(props)
-            
-            # Set up studio lighting
-            util_lighting.create_studio_lighting(props, bounds_info)
-            
-            # Set up studio world
-            util_world.setup_studio_world(props)
-            
-            # Configure render settings for studio
-            util_world.setup_render_settings(props)
-            
-            self.report({'INFO'}, "Studio setup completed")
-            return {'FINISHED'}
-            
-        except Exception as e:
-            self.report({'ERROR'}, f"Studio setup failed: {str(e)}")
-            return {'CANCELLED'}
-
-
-class ALCS_OT_create_control_rig(Operator):
-    """Create spline-based control rig to manipulate camera/lights"""
-    bl_idname = "alcs.create_control_rig"
-    bl_label = "Create Control Rig"
-    bl_description = "Create a spline control rig (orbit/radius/height) for camera and lights"
-    bl_options = {'REGISTER', 'UNDO'}
-
-    def execute(self, context):
-        props = context.scene.auto_setup_props
-        try:
-            # Validate targets and bounds
-            if not util_bounds.validate_targets(props):
-                self.report({'ERROR'}, "No valid target objects found")
-                return {'CANCELLED'}
-            bounds_info = util_bounds.get_bounds_info(props)
-            util_rig.create_spline_control_rig(bounds_info)
-            self.report({'INFO'}, "Control rig created. Use the control empty to orbit/scale/raise camera.")
-            return {'FINISHED'}
-        except Exception as e:
-            self.report({'ERROR'}, f"Create control rig failed: {e}")
-            return {'CANCELLED'}
-
-
-class ALCS_OT_delete_control_rig(Operator):
-    """Delete spline-based control rig"""
-    bl_idname = "alcs.delete_control_rig"
-    bl_label = "Delete Control Rig"
-    bl_description = "Delete the spline control rig"
-    bl_options = {'REGISTER', 'UNDO'}
-
-    def execute(self, context):
-        try:
-            util_rig.delete_control_rig()
-            self.report({'INFO'}, "Control rig deleted")
-            return {'FINISHED'}
-        except Exception as e:
-            self.report({'ERROR'}, f"Delete control rig failed: {e}")
-            return {'CANCELLED'}
