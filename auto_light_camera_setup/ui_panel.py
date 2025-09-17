@@ -141,12 +141,18 @@ class ALCS_PT_auto_setup_panel(Panel):
         """Draw batch processing section"""
         box = layout.box()
         box.label(text="Multi-Shot & Batch", icon='RENDER_ANIMATION')
-        
+
         col = box.column()
-        # Shot settings and single-target multi-shot (集約)
+        # Shot settings and single-target multi-shot（集約）
         col.label(text="Shots", icon='CAMERA_DATA')
         col.prop(props, "shot_types")
         col.prop(props, "render_shots")
+        # Action buttons（常時表示）
+        row = col.row(align=True)
+        row.operator("alcs.generate_multi_shots", text="Generate Shots", icon='CAMERA_DATA')
+        row.operator("alcs.render_shots_now", text="Render Now", icon='RENDER_STILL')
+
+        # Batch settings
         col.prop(props, "batch_mode")
         col.label(text="選択したコレクション群に対し、カメラ設定のショット構成でマルチショットを実行", icon='INFO')
         col.prop(props, "collection_filter")
@@ -155,17 +161,14 @@ class ALCS_PT_auto_setup_panel(Panel):
         # Show matching collections
         draw_collection_list(box, props.collection_filter)
         col.prop(props, "render_per_collection")
-        
-        # 出力先と実行
+
+        # 出力先
         col.separator()
         col.prop(props, "output_path")
         col.label(text="(空欄 = ユーザーのPictures/ALCS_Renders)", icon='INFO')
 
-        # 実行ボタンを下部にまとめる
+        # 実行ボタン（コレクション処理）
         box.separator()
-        row = box.row(align=True)
-        row.operator("alcs.generate_multi_shots", text="Generate Multi-Shots", icon='CAMERA_DATA')
-        box.operator("alcs.process_existing_shots", text="Process (Current Target)", icon='PLAY')
         row = box.row(align=True)
         row.operator("alcs.batch_process", text="Process (Collections)", icon='PLAY')
     

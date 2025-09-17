@@ -172,6 +172,80 @@ class ALCS_OT_generate_multi_shots(Operator):
             except Exception as e:
                 print(f"Failed to render shot {shot_type}: {e}")
 
+class ALCS_OT_render_shots_now(Operator):
+    """Render shots for current target based on shot settings.
+    Reuses existing AutoSetup cameras if present, otherwise generates missing ones, then renders.
+    """
+    bl_idname = "alcs.render_shots_now"
+    bl_label = "Render Shots Now"
+    bl_description = "Render shots immediately from configured shot types"
+    bl_options = {'REGISTER', 'UNDO'}
+
+    def execute(self, context):
+        props = context.scene.auto_setup_props
+        try:
+            # Determine requested shot types
+            if props.shot_types == 'ALL':
+                shot_types = ['FRONT', '3Q_L', '3Q_R', 'TOP', 'LOW']
+            elif props.shot_types == 'FRONT':
+                shot_types = ['FRONT']
+            elif props.shot_types == '3Q':
+                shot_types = ['3Q_L', '3Q_R']
+            else:
+                shot_types = ['FRONT', '3Q_L', '3Q_R', 'TOP', 'LOW']
+
+            # Try to find existing cameras
+            cameras = []
+            missing = []
+            for st in shot_types:
+                cam = bpy.data.objects.get(f"AutoSetup_Camera_{st}")
+                if cam is not None and cam.type == 'CAMERA':
+                    cameras.append(cam)
+                else:
+                    missing.append(st)
+
+            # Generate missing shots if needed
+            if missing:
+                # Validate targets only if we need to generate
+                if not util_bounds.validate_targets(props):
+                    if not cameras:
+                        self.report({'ERROR'}, "No cameras to render and no valid targets to generate")
+                        return {'CANCELLED'}
+                bounds_info = util_bounds.get_bounds_info(props)
+                for st in missing:
+                    cam = util_camera.position_camera_auto(props, bounds_info, st)
+                    cameras.append(cam)
+
+            if not cameras:
+                self.report({'ERROR'}, "No cameras available to render")
+                return {'CANCELLED'}
+
+            # Render all selected shots
+            self._render_shots(props, cameras)
+            self.report({'INFO'}, f"Rendered {len(cameras)} shot(s)")
+            return {'FINISHED'}
+        except Exception as e:
+            self.report({'ERROR'}, f"Render failed: {e}")
+            return {'CANCELLED'}
+
+    def _render_shots(self, props, cameras):
+        import os
+        base_path = resolve_output_path(props.output_path)
+        if not os.path.exists(base_path):
+            os.makedirs(base_path, exist_ok=True)
+
+        ts = get_timestamp()
+        for i, camera in enumerate(cameras):
+            # Extract shot type from camera name
+            shot_type = camera.name.split('_')[-1] if '_' in camera.name else f"shot_{i+1}"
+            filename = f"shot_{shot_type}_{ts}.png"
+            output_path = os.path.join(base_path, filename)
+            try:
+                util_camera.render_camera_shot(camera, output_path)
+                print(f"Rendered shot: {output_path}")
+            except Exception as e:
+                print(f"Failed to render shot {shot_type}: {e}")
+
 class ALCS_OT_cleanup_auto_objects(Operator):
     """Clean up all auto-generated objects"""
     bl_idname = "alcs.cleanup_auto_objects"

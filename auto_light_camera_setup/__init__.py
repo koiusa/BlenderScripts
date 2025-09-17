@@ -27,6 +27,7 @@ classes = (
     presets.ALCS_OT_apply_preset,
     ops_core.ALCS_OT_auto_setup,
     ops_core.ALCS_OT_generate_multi_shots,
+    ops_core.ALCS_OT_render_shots_now,
     ops_core.ALCS_OT_cleanup_auto_objects,
     ops_core.ALCS_OT_focus_camera_on_selection,
     ops_core.ALCS_OT_reload_addon,
