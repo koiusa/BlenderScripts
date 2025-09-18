@@ -34,12 +34,6 @@ class ALCS_PT_auto_setup_panel(Panel):
         self.draw_camera_section(layout, props)
         
         layout.separator()
-        
-        # Lighting Settings
-        self.draw_lighting_section(layout, props)
-        
-        layout.separator()
-        
         # Environment Settings
         self.draw_environment_section(layout, props)
         
@@ -50,10 +44,15 @@ class ALCS_PT_auto_setup_panel(Panel):
         
         layout.separator()
         
+        # Render (grouped buttons at bottom)
+        self.draw_render_section(layout, props)
+        
+        layout.separator()
+        
         # Utilities
         self.draw_utilities_section(layout)
-    
-    # Removed: draw_presets_section (integrated into main controls)
+        
+        # Removed: draw_presets_section (integrated into main controls)
     
     def draw_target_section(self, layout, props):
         """Draw target configuration section"""
@@ -82,7 +81,7 @@ class ALCS_PT_auto_setup_panel(Panel):
         col.operator("alcs.auto_setup", text="Auto Setup", icon='AUTO')
         
         row = box.row(align=True)
-        row.operator("alcs.create_studio_setup", text="Studio Setup", icon='LIGHT')
+        # Studio Setup operator was removed; only keep cleanup
         row.operator("alcs.cleanup_auto_objects", text="Cleanup", icon='TRASH')
     
     def draw_camera_section(self, layout, props):
@@ -99,15 +98,7 @@ class ALCS_PT_auto_setup_panel(Panel):
         if props.enable_dof:
             col.prop(props, "dof_fstop")
     
-    def draw_lighting_section(self, layout, props):
-        """Draw lighting settings section"""
-        box = layout.box()
-        box.label(text="Lighting Settings", icon='LIGHT')
-        
-        col = box.column()
-        col.prop(props, "light_key_intensity")
-        col.prop(props, "light_fill_intensity")
-        col.prop(props, "light_rim_intensity")
+    
 
     def draw_environment_section(self, layout, props):
         """Draw environment settings section"""
@@ -147,10 +138,9 @@ class ALCS_PT_auto_setup_panel(Panel):
         col.label(text="Shots", icon='CAMERA_DATA')
         col.prop(props, "shot_types")
         col.prop(props, "render_shots")
-        # Action buttons（常時表示）
+        # Action buttons（常時表示：生成のみ）。レンダー実行は下部に集約。
         row = col.row(align=True)
         row.operator("alcs.generate_multi_shots", text="Generate Shots", icon='CAMERA_DATA')
-        row.operator("alcs.render_shots_now", text="Render Now", icon='RENDER_STILL')
 
         # Batch settings
         col.prop(props, "batch_mode")
@@ -158,8 +148,12 @@ class ALCS_PT_auto_setup_panel(Panel):
         col.prop(props, "collection_filter")
         col.label(text="Filterの使い方: 名前の部分一致・大文字小文字無視。空欄=全件。子コレクションも対象。", icon='INFO')
         col.prop(props, "batch_target_collection")
-        # Show matching collections
-        draw_collection_list(box, props.collection_filter)
+        # Show matching collections (safe)
+        try:
+            draw_collection_list(box, props.collection_filter)
+        except Exception as e:
+            warn = box.box()
+            warn.label(text=f"Collections preview unavailable: {e}", icon='ERROR')
         col.prop(props, "render_per_collection")
 
         # 出力先
@@ -167,10 +161,15 @@ class ALCS_PT_auto_setup_panel(Panel):
         col.prop(props, "output_path")
         col.label(text="(空欄 = ユーザーのPictures/ALCS_Renders)", icon='INFO')
 
-        # 実行ボタン（コレクション処理）
-        box.separator()
-        row = box.row(align=True)
-        row.operator("alcs.batch_process", text="Process (Collections)", icon='PLAY')
+        # 実行ボタン（コレクション処理）は下部の Render セクションに集約
+        
+    def draw_render_section(self, layout, props):
+        """Group render execution buttons at bottom"""
+        box = layout.box()
+        box.label(text="Render", icon='RENDER_STILL')
+        col = box.column(align=True)
+        col.operator("alcs.render_shots_now", text="Render Shots Now", icon='RENDER_STILL')
+        col.operator("alcs.batch_process", text="Process (Collections)", icon='PLAY')
     
     def draw_utilities_section(self, layout):
         """Draw utilities section"""
@@ -179,6 +178,20 @@ class ALCS_PT_auto_setup_panel(Panel):
         
         col = box.column(align=True)
         col.operator("alcs.focus_camera_on_selection", text="Focus on Selection", icon='ZOOM_SELECTED')
+        # Debugging helpers
+        row = col.row(align=True)
+        op = row.operator("alcs.start_debug_server", text="Start Debug Server", icon='CONSOLE')
+        # Use defaults (5678, no-wait, no-break) for quick start
+        op.port = 5678
+        op.wait = False
+        op.break_now = False
+        row = col.row(align=True)
+        op = row.operator("alcs.start_debug_server", text="Start Debug (Wait)", icon='PLAY')
+        op.port = 5678
+        op.wait = True
+        op.break_now = False
+        row = col.row(align=True)
+        row.operator("alcs.debug_break_now", text="Break Now", icon='PAUSE')
         col.operator("alcs.reload_addon", text="Reload Add-on", icon='FILE_REFRESH')
 
 class ALCS_PT_advanced_panel(Panel):
@@ -260,6 +273,34 @@ class ALCS_PT_info_panel(Panel):
         col.label(text="• Batch mode processes multiple collections")
         col.label(text="• HDRI files improve lighting quality")
 
+class ALCS_PT_quick_tools_panel(Panel):
+    """Quick Tools panel to always expose Reload button"""
+    bl_label = "Quick Tools"
+    bl_idname = "ALCS_PT_quick_tools_panel"
+    bl_space_type = 'VIEW_3D'
+    bl_region_type = 'UI'
+    bl_category = "Auto Setup"
+    bl_options = {'DEFAULT_CLOSED'}
+
+    def draw(self, context):
+        layout = self.layout
+        col = layout.column(align=True)
+        col.operator("alcs.reload_addon", text="Reload Add-on", icon='FILE_REFRESH')
+        col.operator("alcs.focus_camera_on_selection", text="Focus on Selection", icon='ZOOM_SELECTED')
+        # Quick debug actions
+        row = col.row(align=True)
+        op = row.operator("alcs.start_debug_server", text="Start Debug Server", icon='CONSOLE')
+        op.port = 5678
+        op.wait = False
+        op.break_now = False
+        row = col.row(align=True)
+        op = row.operator("alcs.start_debug_server", text="Start Debug (Wait)", icon='PLAY')
+        op.port = 5678
+        op.wait = True
+        op.break_now = False
+        row = col.row(align=True)
+        row.operator("alcs.debug_break_now", text="Break Now", icon='PAUSE')
+
 def draw_collection_list(layout, collection_filter=""):
     """Draw a list of available collections for batch processing"""
     from . import ops_batch
@@ -288,4 +329,5 @@ classes = (
     ALCS_PT_auto_setup_panel,
     ALCS_PT_advanced_panel,
     ALCS_PT_info_panel,
+    ALCS_PT_quick_tools_panel,
 )

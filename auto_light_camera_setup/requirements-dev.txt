@@ -1,0 +1,11 @@
+# Development-only dependencies for editor tooling (NOT used by Blender runtime)
+# Choose the closest fake-bpy version to your Blender (4.5.x → use 4.0/4.1 as a stub)
+fake-bpy-module-4.0
+
+# Linters/formatters
+ruff
+black
+isort
+
+# Optional: VS Code attach debugger (used for local scripts, Blender uses its own Python)
+debugpy

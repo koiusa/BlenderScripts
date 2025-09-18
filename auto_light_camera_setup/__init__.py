@@ -31,11 +31,14 @@ classes = (
     ops_core.ALCS_OT_cleanup_auto_objects,
     ops_core.ALCS_OT_focus_camera_on_selection,
     ops_core.ALCS_OT_reload_addon,
+    ops_core.ALCS_OT_start_debug_server,
+    ops_core.ALCS_OT_debug_break_now,
     ops_batch.ALCS_OT_batch_process,
     ops_batch.ALCS_OT_setup_collection_shots,
     ui_panel.ALCS_PT_auto_setup_panel,
     ui_panel.ALCS_PT_advanced_panel,
     ui_panel.ALCS_PT_info_panel,
+    ui_panel.ALCS_PT_quick_tools_panel,
 )
 
 def _safe_register_class(cls):

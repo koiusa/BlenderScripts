@@ -23,10 +23,52 @@ def setup_world_environment(props):
     # Enable nodes
     world.use_nodes = True
     
-    if props.use_hdri and props.hdri_path and os.path.exists(props.hdri_path):
-        setup_hdri_environment(world, props)
+    if props.use_hdri:
+        # Prefer user-specified HDRI; if missing, try Blender's default world StudioLight
+        hdri_path = props.hdri_path if getattr(props, 'hdri_path', None) else ""
+        if not hdri_path or not os.path.exists(hdri_path):
+            default_path = _get_default_world_hdri_path()
+            if default_path and os.path.exists(default_path):
+                # Persist choice to props so users can see the resolved path in UI
+                try:
+                    props.hdri_path = default_path
+                except Exception:
+                    pass
+                hdri_path = default_path
+        if hdri_path and os.path.exists(hdri_path):
+            setup_hdri_environment(world, props)
+        else:
+            setup_basic_world(world, props)
     else:
         setup_basic_world(world, props)
+
+def _get_default_world_hdri_path() -> str | None:
+    """Return a reasonable default HDRI path bundled with Blender (StudioLight WORLD).
+
+    Preference order:
+    - Studio light whose name contains 'studio' (common default)
+    - First non-user-defined WORLD studio light
+    - First WORLD studio light
+    Returns None if nothing is found.
+    """
+    try:
+        # Blender provides built-in studio lights accessible via bpy.app.studiolights
+        world_lights = [sl for sl in getattr(bpy.app, 'studiolights', []) if getattr(sl, 'type', None) == 'WORLD']
+        if not world_lights:
+            return None
+        # Prefer one named like 'studio'
+        for sl in world_lights:
+            name = getattr(sl, 'name', '') or ''
+            if 'studio' in name.lower():
+                return getattr(sl, 'path', None)
+        # Prefer non-user-defined
+        for sl in world_lights:
+            if not getattr(sl, 'is_user_defined', False):
+                return getattr(sl, 'path', None)
+        # Fallback to first available
+        return getattr(world_lights[0], 'path', None)
+    except Exception:
+        return None
 
 def setup_hdri_environment(world: bpy.types.World, props):
     """

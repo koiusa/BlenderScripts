@@ -13,7 +13,7 @@ from . import util_world
 from . import util_rig
 from . import util_collections
 from .utils import resolve_output_path, get_timestamp
-from .debug_utils import debugger, verify_rig_consistency, get_debug_report
+from .debug_utils import debugger, verify_rig_consistency, get_debug_report, start_debugpy
 
 class ALCS_OT_auto_setup(Operator):
     """Automatically set up lighting, camera, and environment"""
@@ -363,5 +363,48 @@ class ALCS_OT_reload_addon(Operator):
             return {'FINISHED'}
         except Exception as e:
             self.report({'ERROR'}, f"Reload failed: {e}")
+            return {'CANCELLED'}
+
+
+class ALCS_OT_start_debug_server(Operator):
+    """Start VS Code debug server (debugpy) and optionally wait/break"""
+    bl_idname = "alcs.start_debug_server"
+    bl_label = "Start Debug Server"
+    bl_description = "Start debugpy on a port and optionally wait for attach or break now"
+    bl_options = {'REGISTER'}
+
+    port: bpy.props.IntProperty(name="Port", default=5678, min=1024, max=65535)
+    wait: bpy.props.BoolProperty(name="Wait for Attach", default=False)
+    break_now: bpy.props.BoolProperty(name="Break Now", default=False)
+
+    def execute(self, context):
+        ok = start_debugpy(self.port, self.wait, self.break_now)
+        if ok:
+            self.report({'INFO'}, f"debugpy listening on {self.port}")
+            return {'FINISHED'}
+        else:
+            self.report({'ERROR'}, "Failed to start debug server (see console)")
+            return {'CANCELLED'}
+
+
+class ALCS_OT_debug_break_now(Operator):
+    """Trigger a debug breakpoint via debugpy if attached"""
+    bl_idname = "alcs.debug_break_now"
+    bl_label = "Break (debugpy)"
+    bl_description = "If VS Code is attached, trigger a breakpoint now"
+    bl_options = {'REGISTER'}
+
+    def execute(self, context):
+        try:
+            import debugpy  # type: ignore
+            try:
+                debugpy.breakpoint()
+                self.report({'INFO'}, "Breakpoint triggered")
+                return {'FINISHED'}
+            except Exception as e:
+                self.report({'ERROR'}, f"breakpoint error: {e}")
+                return {'CANCELLED'}
+        except Exception:
+            self.report({'ERROR'}, "debugpy not available. Use 'Start Debug Server' first.")
             return {'CANCELLED'}
 

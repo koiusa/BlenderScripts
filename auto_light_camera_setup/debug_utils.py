@@ -7,6 +7,8 @@ import bpy
 from mathutils import Vector
 from typing import Dict, List, Any, Optional
 from datetime import datetime
+import sys
+import importlib
 
 
 class ALCSDebugger:
@@ -279,3 +281,72 @@ def get_debug_report() -> str:
     report.append(debugger.dump_logs())
     
     return '\n'.join(report)
+
+
+# === VS Code debug integration (debugpy) ===
+def _ensure_debugpy() -> Optional[object]:
+    """Ensure debugpy is importable; try to install into Blender Python if missing.
+    Returns the debugpy module or None if unavailable.
+    """
+    try:
+        import debugpy  # type: ignore
+        return debugpy
+    except Exception:
+        # Try lazy install using ensurepip + pip within Blender's Python
+        try:
+            import ensurepip  # noqa: F401
+        except Exception:
+            pass  # ensurepip may not be available; we'll still try pip
+        try:
+            import subprocess
+            py = sys.executable
+            # Install/upgrade debugpy quietly
+            subprocess.check_call([py, "-m", "pip", "install", "--upgrade", "debugpy"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            import debugpy  # type: ignore
+            return debugpy
+        except Exception as e:
+            print(f"[ALCS] debugpy not available: {e}")
+            return None
+
+
+def start_debugpy(port: int = 5678, wait: bool = False, break_now: bool = False) -> bool:
+    """Start debugpy server for VS Code attach and optionally wait or break immediately.
+
+    Args:
+        port: TCP port to listen on (default 5678)
+        wait: If True, wait for client to attach before returning
+        break_now: If True, trigger a breakpoint after attach (or immediately if already attached)
+    Returns:
+        bool: True if server started or already active, False on failure
+    """
+    dbg = _ensure_debugpy()
+    if dbg is None:
+        return False
+
+    try:
+        # If already listening, don't error
+        if not getattr(dbg, "is_client_connected", lambda: False)():
+            try:
+                dbg.listen(("127.0.0.1", port))
+                print(f"[ALCS] debugpy listening on 127.0.0.1:{port}")
+            except Exception as e:
+                # Possibly already listening in this process; ignore if port in use
+                print(f"[ALCS] debugpy.listen failed (may already be active): {e}")
+
+        if wait:
+            print("[ALCS] Waiting for VS Code debugger to attach...")
+            try:
+                dbg.wait_for_client()
+            except Exception as e:
+                print(f"[ALCS] wait_for_client error: {e}")
+
+        if break_now:
+            try:
+                dbg.breakpoint()
+            except Exception as e:
+                print(f"[ALCS] breakpoint error: {e}")
+
+        return True
+    except Exception as e:
+        print(f"[ALCS] start_debugpy error: {e}")
+        return False
