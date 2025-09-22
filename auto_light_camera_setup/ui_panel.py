@@ -1,0 +1,333 @@
+"""
+UI Panel for Auto Light Camera Setup.
+Provides the Blender interface for the add-on.
+"""
+
+import bpy
+from bpy.types import Panel
+from . import presets
+
+class ALCS_PT_auto_setup_panel(Panel):
+    """Main panel for Auto Light Camera Setup"""
+    bl_label = "Auto Light Camera Setup"
+    bl_idname = "ALCS_PT_auto_setup_panel"
+    bl_space_type = 'VIEW_3D'
+    bl_region_type = 'UI'
+    bl_category = "Auto Setup"
+    
+    def draw(self, context):
+        layout = self.layout
+        props = context.scene.auto_setup_props
+        # Presets were moved into Main Controls as a dropdown
+
+        # Target Configuration
+        self.draw_target_section(layout, props)
+        
+        layout.separator()
+
+        # Main Setup Controls (with Preset selector)
+        self.draw_main_controls(layout, props)
+        
+        layout.separator()
+        
+        # Camera Settings
+        self.draw_camera_section(layout, props)
+        
+        layout.separator()
+        # Environment Settings
+        self.draw_environment_section(layout, props)
+        
+        layout.separator()
+        
+        # Multi-shot and Batch
+        self.draw_batch_section(layout, props)
+        
+        layout.separator()
+        
+        # Render (grouped buttons at bottom)
+        self.draw_render_section(layout, props)
+        
+        layout.separator()
+        
+        # Utilities
+        self.draw_utilities_section(layout)
+        
+        # Removed: draw_presets_section (integrated into main controls)
+    
+    def draw_target_section(self, layout, props):
+        """Draw target configuration section"""
+        box = layout.box()
+        box.label(text="Target Configuration", icon='OBJECT_DATA')
+        
+        col = box.column()
+        col.prop(props, "use_selection")
+        
+        if not props.use_selection:
+            col.prop_search(props, "target_collection", bpy.data, "collections")
+    
+    def draw_main_controls(self, layout, props):
+        """Draw main control buttons"""
+        box = layout.box()
+        box.label(text="Main Controls", icon='TOOL_SETTINGS')
+        
+        col = box.column(align=True)
+        # Preset dropdown + apply button
+        row = col.row(align=True)
+        row.prop(props, "preset_name", text="Preset")
+        op = row.operator("alcs.apply_preset", text="Apply", icon='CHECKMARK')
+        op.preset_name = getattr(props, 'preset_name', 'PRODUCT')
+        
+        col.separator()
+        col.operator("alcs.auto_setup", text="Auto Setup", icon='AUTO')
+        
+        row = box.row(align=True)
+        # Studio Setup operator was removed; only keep cleanup
+        row.operator("alcs.cleanup_auto_objects", text="Cleanup", icon='TRASH')
+    
+    def draw_camera_section(self, layout, props):
+        """Draw camera settings section"""
+        box = layout.box()
+        box.label(text="Camera Settings", icon='CAMERA_DATA')
+        
+        col = box.column()
+        col.prop(props, "camera_distance_factor")
+        col.prop(props, "camera_lens")
+        
+        col.separator()
+        col.prop(props, "enable_dof")
+        if props.enable_dof:
+            col.prop(props, "dof_fstop")
+    
+    
+
+    def draw_environment_section(self, layout, props):
+        """Draw environment settings section"""
+        box = layout.box()
+        box.label(text="Environment", icon='WORLD')
+
+        col = box.column()
+
+        # Floor settings
+        col.prop(props, "add_floor")
+        if props.add_floor:
+            col.prop(props, "floor_material_color")
+
+        col.separator()
+
+        # World/HDRI settings
+        col.prop(props, "use_hdri")
+        if props.use_hdri:
+            col.prop(props, "hdri_path")
+            col.prop(props, "hdri_strength")
+        else:
+            col.prop(props, "world_strength")
+
+        col.separator()
+
+        # Render settings
+        col.prop(props, "enable_filmic")
+        col.prop(props, "exposure")
+    
+    def draw_batch_section(self, layout, props):
+        """Draw batch processing section"""
+        box = layout.box()
+        box.label(text="Multi-Shot & Batch", icon='RENDER_ANIMATION')
+
+        col = box.column()
+        # Shot settings and single-target multi-shot（集約）
+        col.label(text="Shots", icon='CAMERA_DATA')
+        col.prop(props, "shot_types")
+        col.prop(props, "render_shots")
+        # Action buttons（常時表示：生成のみ）。レンダー実行は下部に集約。
+        row = col.row(align=True)
+        row.operator("alcs.generate_multi_shots", text="Generate Shots", icon='CAMERA_DATA')
+
+        # Batch settings
+        col.prop(props, "batch_mode")
+        col.label(text="選択したコレクション群に対し、カメラ設定のショット構成でマルチショットを実行", icon='INFO')
+        col.prop(props, "collection_filter")
+        col.label(text="Filterの使い方: 名前の部分一致・大文字小文字無視。空欄=全件。子コレクションも対象。", icon='INFO')
+        col.prop(props, "batch_target_collection")
+        # Show matching collections (safe)
+        try:
+            draw_collection_list(box, props.collection_filter)
+        except Exception as e:
+            warn = box.box()
+            warn.label(text=f"Collections preview unavailable: {e}", icon='ERROR')
+        col.prop(props, "render_per_collection")
+
+        # 出力先
+        col.separator()
+        col.prop(props, "output_path")
+        col.label(text="(空欄 = ユーザーのPictures/ALCS_Renders)", icon='INFO')
+
+        # 実行ボタン（コレクション処理）は下部の Render セクションに集約
+        
+    def draw_render_section(self, layout, props):
+        """Group render execution buttons at bottom"""
+        box = layout.box()
+        box.label(text="Render", icon='RENDER_STILL')
+        col = box.column(align=True)
+        col.operator("alcs.render_shots_now", text="Render Shots Now", icon='RENDER_STILL')
+        col.operator("alcs.batch_process", text="Process (Collections)", icon='PLAY')
+    
+    def draw_utilities_section(self, layout):
+        """Draw utilities section"""
+        box = layout.box()
+        box.label(text="Utilities", icon='TOOL_SETTINGS')
+        
+        col = box.column(align=True)
+        col.operator("alcs.focus_camera_on_selection", text="Focus on Selection", icon='ZOOM_SELECTED')
+        # Debugging helpers
+        row = col.row(align=True)
+        op = row.operator("alcs.start_debug_server", text="Start Debug Server", icon='CONSOLE')
+        # Use defaults (5678, no-wait, no-break) for quick start
+        op.port = 5678
+        op.wait = False
+        op.break_now = False
+        row = col.row(align=True)
+        op = row.operator("alcs.start_debug_server", text="Start Debug (Wait)", icon='PLAY')
+        op.port = 5678
+        op.wait = True
+        op.break_now = False
+        row = col.row(align=True)
+        row.operator("alcs.debug_break_now", text="Break Now", icon='PAUSE')
+        col.operator("alcs.reload_addon", text="Reload Add-on", icon='FILE_REFRESH')
+
+class ALCS_PT_advanced_panel(Panel):
+    """Advanced settings panel"""
+    bl_label = "Advanced Settings"
+    bl_idname = "ALCS_PT_advanced_panel"
+    bl_space_type = 'VIEW_3D'
+    bl_region_type = 'UI'
+    bl_category = "Auto Setup"
+    bl_parent_id = "ALCS_PT_auto_setup_panel"
+    bl_options = {'DEFAULT_CLOSED'}
+    
+    def draw(self, context):
+        layout = self.layout
+        props = context.scene.auto_setup_props
+        
+        # Advanced camera settings
+        box = layout.box()
+        box.label(text="Advanced Camera", icon='CAMERA_DATA')
+        col = box.column()
+        
+        # Custom shot configuration could go here
+        col.label(text="Custom shots coming soon...")
+        
+        # Advanced lighting settings
+        box = layout.box()
+        box.label(text="Advanced Lighting", icon='LIGHT')
+        col = box.column()
+        
+        col.label(text="Advanced lighting controls coming soon...")
+        
+        # Performance settings
+        box = layout.box()
+        box.label(text="Performance", icon='PREFERENCES')
+        col = box.column()
+        
+        col.label(text="Performance options coming soon...")
+
+class ALCS_PT_info_panel(Panel):
+    """Information and help panel"""
+    bl_label = "Info & Help"
+    bl_idname = "ALCS_PT_info_panel"
+    bl_space_type = 'VIEW_3D'
+    bl_region_type = 'UI'
+    bl_category = "Auto Setup"
+    bl_parent_id = "ALCS_PT_auto_setup_panel"
+    bl_options = {'DEFAULT_CLOSED'}
+    
+    def draw(self, context):
+        layout = self.layout
+        
+        # Quick usage guide
+        box = layout.box()
+        box.label(text="Quick Start", icon='INFO')
+        col = box.column(align=True)
+        col.label(text="1. Select objects or choose collection")
+        col.label(text="2. Choose a preset or configure manually")
+        col.label(text="3. Click 'Auto Setup' to create cameras/lights")
+        col.label(text="4. Set 'Shots' and use 'Process (Current Target)' to render/activate existing shots, or enable Batch Mode for collections")
+        
+        # Preset descriptions
+        box = layout.box()
+        box.label(text="Presets", icon='PRESET')
+        col = box.column(align=True)
+        
+        for preset_key, preset_data in presets.PRESETS.items():
+            row = col.row()
+            row.label(text=f"{preset_data['name']}:")
+            row = col.row()
+            row.label(text=f"  {preset_data['description']}")
+            col.separator()
+        
+        # Tips
+        box = layout.box()
+        box.label(text="Tips", icon='LIGHTBULB')
+        col = box.column(align=True)
+        col.label(text="• Use 'Focus on Selection' to adjust camera")
+        col.label(text="• 'Cleanup' removes all auto-generated objects")
+        col.label(text="• Batch mode processes multiple collections")
+        col.label(text="• HDRI files improve lighting quality")
+
+class ALCS_PT_quick_tools_panel(Panel):
+    """Quick Tools panel to always expose Reload button"""
+    bl_label = "Quick Tools"
+    bl_idname = "ALCS_PT_quick_tools_panel"
+    bl_space_type = 'VIEW_3D'
+    bl_region_type = 'UI'
+    bl_category = "Auto Setup"
+    bl_options = {'DEFAULT_CLOSED'}
+
+    def draw(self, context):
+        layout = self.layout
+        col = layout.column(align=True)
+        col.operator("alcs.reload_addon", text="Reload Add-on", icon='FILE_REFRESH')
+        col.operator("alcs.focus_camera_on_selection", text="Focus on Selection", icon='ZOOM_SELECTED')
+        # Quick debug actions
+        row = col.row(align=True)
+        op = row.operator("alcs.start_debug_server", text="Start Debug Server", icon='CONSOLE')
+        op.port = 5678
+        op.wait = False
+        op.break_now = False
+        row = col.row(align=True)
+        op = row.operator("alcs.start_debug_server", text="Start Debug (Wait)", icon='PLAY')
+        op.port = 5678
+        op.wait = True
+        op.break_now = False
+        row = col.row(align=True)
+        row.operator("alcs.debug_break_now", text="Break Now", icon='PAUSE')
+
+def draw_collection_list(layout, collection_filter=""):
+    """Draw a list of available collections for batch processing"""
+    from . import ops_batch
+    
+    box = layout.box()
+    box.label(text="Available Collections", icon='OUTLINER_COLLECTION')
+    
+    collections = ops_batch.get_collections_for_batch(collection_filter)
+    
+    if not collections:
+        box.label(text="No collections found", icon='ERROR')
+        return
+    
+    col = box.column()
+    for collection_name in collections[:10]:  # Limit to first 10
+        row = col.row()
+        row.label(text=collection_name, icon='COLLECTION_COLOR_01')
+        op = row.operator("alcs.setup_collection_shots", text="Setup", icon='AUTO')
+        op.collection_name = collection_name
+    
+    if len(collections) > 10:
+        box.label(text=f"... and {len(collections) - 10} more")
+
+# Register UI classes
+classes = (
+    ALCS_PT_auto_setup_panel,
+    ALCS_PT_advanced_panel,
+    ALCS_PT_info_panel,
+    ALCS_PT_quick_tools_panel,
+)

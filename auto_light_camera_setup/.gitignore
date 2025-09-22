@@ -1,0 +1,9 @@
+# Virtual environment
+.venv/
+
+# VS Code local settings
+.vscode/
+
+# Bytecode
+__pycache__/
+*.pyc
